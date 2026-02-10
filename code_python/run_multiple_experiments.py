@@ -22,9 +22,12 @@ output_dir: str = '../experiments_outputs'
 os.makedirs(output_dir, exist_ok=True)
 
 
+# ...existing code...
+
 def extract_stoppage_reason(output: str) -> str:
     """
     Parse the stdout of main.py to extract the stoppage reason.
+    Searches from the end of the output to find the last occurrence.
 
     Args:
         output: Full stdout string from the subprocess.
@@ -32,11 +35,10 @@ def extract_stoppage_reason(output: str) -> str:
     Returns:
         The stoppage reason string, or 'unknown' if not found.
     """
-    for line in output.splitlines():
+    for line in reversed(output.splitlines()):
         if line.startswith("STOPPAGE_REASON:"):
             return line.split(":", 1)[1].strip()
     return "unknown"
-
 
 for i, params in enumerate(param_sets):
     for sample in range(num_technical_samples):
