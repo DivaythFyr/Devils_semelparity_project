@@ -1,0 +1,260 @@
+# Tasmanian Devil Semelparity Simulation
+
+A vectorization based simulation modeling the evolutionary dynamics of semelparity vs iteroparity in Tasmanian devils under disease pressure (Devil Facial Tumor Disease - DFTD).
+
+## Overview
+
+This simulation explores how different reproductive strategies (semelparous = reproduce once then die, iteroparous = reproduce multiple times) evolve in a population of Tasmanian devils facing an infectious facial tumor disease. The model tracks individuals on a 2D spatial map, simulating movement, territory acquisition, mating, infection spread, and death.
+
+---
+
+## Project Structure
+
+```
+code_python/
+├── main.py              # Main simulation loop and workflow
+├── constants.py         # All configurable parameters and constants
+├── state.py             # SimulationState dataclass and statistics collection
+├── simulation_core.py   # Core lifecycle functions (birth, death, transitions)
+├── physics.py           # Movement, repulsion, and spatial calculations
+├── genetics.py          # Reproduction and chromosome inheritance
+├── infection.py         # Disease seeding and transmission
+├── visualisation.py     # Snapshot creation and GIF generation
+└── devils_with_kids.py  # Legacy monolithic implementation (reference only)
+
+output/
+├── results/             # CSV statistics and summary plots
+└── snapshots_run_XXX/   # PNG frames for each simulation run
+```
+
+---
+
+## Simulation Workflow (main.py)
+
+The main simulation loop executes the following steps each day (iteration):
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         SIMULATION LOOP                             │
+├─────────────────────────────────────────────────────────────────────┤
+│  1. PATHOGEN SEEDING                                                │
+│     └── Introduce disease at TIME_OF_PATHOGEN (typically day 0)    │
+│                                                                     │
+│  2. MOVEMENT                                                        │
+│     ├── Pairwise repulsion between residents                       │
+│     ├── Territory attraction for residents                         │
+│     ├── Wall repulsion at map boundaries                           │
+│     ├── Speed clamping                                              │
+│     ├── Position update                                             │
+│     └── Territory and map boundary enforcement                     │
+│                                                                     │
+│  3. INFECTION SPREAD                                                │
+│     ├── Sexual transmission (breeding season, adults, phase 1)     │
+│     └── Nonsexual transmission (all residents, all phases)         │
+│                                                                     │
+│  4. REPRODUCTION (days 0-10 only)                                   │
+│     ├── Calculate adult interaction matrix                         │
+│     ├── Pair females with males                                    │
+│     ├── Generate offspring genotypes                               │
+│     └── Store pending offspring                                    │
+│                                                                     │
+│  5. OFFSPRING LIFECYCLE                                             │
+│     ├── Birth pending offspring (day 100)                          │
+│     └── Disperse juveniles (days 100-160)                          │
+│                                                                     │
+│  6. AGING                                                           │
+│     └── Increment age for all individuals                          │
+│                                                                     │
+│  7. STATUS TRANSITIONS                                              │
+│     ├── Child → Juvenile without territory (age 160)               │
+│     ├── Juvenile without territory → Juvenile with territory       │
+│     └── Juvenile with territory → Adult (age 220)                  │
+│                                                                     │
+│  8. DISEASE PROGRESSION                                             │
+│     ├── Increment age_of_disease for infected (phase 1)            │
+│     └── Transition to phase 2 when threshold reached               │
+│                                                                     │
+│  9. DEATH PROCESSING (batched for performance)                      │
+│     ├── Age-related death (MAX_AGE)                                 │
+│     ├── Base mortality (random)                                     │
+│     ├── Disease mortality (sigmoid probability)                    │
+│     ├── Phase 2 infection death                                    │
+│     ├── No territory death (juveniles past deadline)               │
+│     └── Semelparity death (mated males, day 10)                    │
+│                                                                     │
+│ 10. STOPPAGE CHECK                                                  │
+│     ├── Extinction (pop_size == 0)                                 │
+│     ├── Semelparity fixation (≥99.9%)                              │
+│     ├── Iteroparity fixation (≥99.9%)                              │
+│     └── Loss of semelparous individuals                            │
+│                                                                     │
+│ 11. STATISTICS & VISUALIZATION                                      │
+│     ├── Collect statistics (every STATS_INTERVAL steps)            │
+│     └── Draw snapshot (at predefined timepoints)                   │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Module Descriptions
+
+### constants.py
+**Provides:** All configurable parameters for the simulation.
+
+| Category | Examples | Used By |
+|----------|----------|---------|
+| Device | `DEVICE` | All modules (CPU on Mac M4, any other - GPU) |
+| Time | `TIMEPOINTS`, `DAYS_PER_YEAR`, `BREEDING_DAYS` | main.py, genetics.py, infection.py |
+| Population | `INIT_POP_SIZE`, `MAX_POP_SIZE`, `MAX_AGE` | state.py, simulation_core.py |
+| Space | `MAP_X_SIZE`, `MAP_Y_SIZE`, `RANGE`, `REPULSION` | physics.py, visualisation.py |
+| Infection | `INFECTIVITY1`, `INFECTIVITY2`, `LATENCY`, `INCUBATION` | infection.py, main.py |
+| Status | `STATUS_CHILD`, `STATUS_ADULT`, etc. | All modules |
+| Transitions | `AGE_CHILD_TO_JUVENILE`, `AGE_JUVENILE_TO_ADULT` | simulation_core.py |
+
+---
+
+### state.py
+**Provides:** Data structures for simulation state and statistics.
+
+| Component | Description | Used By |
+|-----------|-------------|---------|
+| `SimulationState` | Dataclass holding all simulation tensors (positions, ages, infection, genetics) | All modules |
+| `create_initial_state()` | Allocates preallocated tensors for maximum population size | main.py |
+| `SimulationStats` | Dataclass for per-timestep statistics | main.py, visualisation.py |
+| `collect_statistics()` | Gathers population metrics from current state | main.py |
+
+**Key tensors in SimulationState:**
+- Spatial: `x`, `y`, `speed_x`, `speed_y`, `territory_center_x`, `territory_center_y`
+- Demographics: `age`, `sex`, `status`, `fitness`
+- Genetics: `chrom_a` (reproductive alleles), `chrom_sex` (sex chromosomes)
+- Infection: `infection_status`, `age_of_disease`
+- Reproduction: `mated_male`, `pending_offspring_*`
+
+---
+
+### simulation_core.py
+**Provides:** Core lifecycle functions for population management.
+
+| Function | Description | Called From |
+|----------|-------------|-------------|
+| `initialize_population()` | Sets up initial adult population with positions, ages, genotypes | main.py (once) |
+| `add_animal()` | Adds new individuals to population arrays | genetics.py |
+| `delete_animal()` | Removes individuals by compacting arrays | Death functions |
+| `transition_child_to_juvenile_no_terr()` | Age 160: children become juveniles | main.py |
+| `transition_juvenile_no_terr_to_terr()` | Juveniles acquire territory based on fitness | main.py |
+| `transition_juvenile_terr_to_adult()` | Age 220: juveniles become adults | main.py |
+| `birth_pending_offspring()` | Day 100: pending offspring enter population | main.py |
+| `disperse_offspring()` | Days 100-160: juveniles move and seek territory | main.py |
+| `process_all_deaths()` | Batched death processing (optimized) | main.py |
+
+---
+
+### physics.py
+**Provides:** Movement mechanics and spatial calculations.
+
+| Function | Description | Called From |
+|----------|-------------|-------------|
+| `move()` | Main movement function: repulsion, attraction, boundary enforcement | main.py |
+| `calculate_pairwise_distances()` | Computes squared distances between two sets of positions | main.py, genetics.py |
+| `calculate_area_and_fitness()` | Updates fitness based on territory overlap | simulation_core.py |
+| `calculate_fitness_for_candidates()` | Evaluates potential territory positions | simulation_core.py |
+
+**Movement mechanics in `move()`:**
+1. Resident-only pairwise repulsion (prevents crowding)
+2. Territory attraction (residents stay near territory center)
+3. Wall repulsion (keeps individuals in map bounds)
+4. Speed clamping (prevents unrealistic velocities)
+5. Territory boundary enforcement (residents can't leave territory)
+6. Map boundary correction (reflects off edges)
+
+---
+
+### genetics.py
+**Provides:** Reproduction and genetic inheritance.
+
+| Function | Description | Called From |
+|----------|-------------|-------------|
+| `calculate_chrom()` | Generates offspring genotypes from parent chromosomes | `replication()` |
+| `replication()` | Pairs adults for mating, creates pending offspring | main.py |
+
+**Genetic system:**
+- `chrom_a`: Reproductive alleles [0=iteroparous, 1=semelparous]
+  - Homozygous [1,1]: Semelparous (males die after mating)
+  - Homozygous [0,0] or Heterozygous: Iteroparous
+- `chrom_sex`: Sex chromosomes [X=0, Y=1]
+  - Female: [0,0], Male: [0,1] or [1,0]
+
+---
+
+### infection.py
+**Provides:** Disease transmission mechanics.
+
+| Function | Description | Called From |
+|----------|-------------|-------------|
+| `seed_pathogen()` | Infects initial individuals at simulation start | main.py |
+| `infection_spread()` | Spreads disease between residents | main.py |
+
+**Transmission mechanics:**
+- **Sexual transmission** (`INFECTIVITY1`): Adults only, breeding season (days 0-10), phase 1 only
+- **Nonsexual transmission** (`INFECTIVITY2`): All residents, all phases, within `MAX_RADIUS`
+- **Distance scaling**: Probability decreases with distance
+- **Phase progression**: Phase 1 (latent) → Phase 2 (symptomatic/death)
+
+---
+
+### visualisation.py
+**Provides:** Output generation (plots, GIFs, summaries).
+
+| Function | Description | Called From |
+|----------|-------------|-------------|
+| `create_output_folders()` | Creates directory structure for outputs | main.py |
+| `draw_snapshot()` | Saves PNG with spatial, age, population, genotype panels | main.py |
+| `create_gif_from_snapshots()` | Combines PNGs into animated GIF | main.py |
+| `plot_final_summary()` | Creates summary plots after simulation ends | main.py |
+| `should_draw_snapshot()` | Determines if snapshot should be drawn at given time | main.py |
+
+**Snapshot panels:**
+1. Spatial distribution (colored by genotype/infection)
+2. Age histogram
+3. Population dynamics over time
+4. Genotype dynamics over time
+
+---
+
+## Performance Optimizations
+
+The simulation is optimized for GPU execution:
+
+1. **Preallocated tensors**: All arrays sized to `MAX_POP_SIZE` to avoid reallocation
+2. **Batched death processing**: Single `delete_animal()` call instead of multiple
+3. **Conditional computation**: Expensive operations (mating matrix) only when needed
+4. **Reduced GPU-CPU sync**: Statistics and stoppage checks at intervals
+5. **Vectorized operations**: All computations use PyTorch tensor operations
+
+---
+
+## Running the Simulation
+
+```bash
+cd code_python
+python main.py
+```
+
+Outputs are saved to `../output/`:
+- `results/simulation_stats.csv`: Time series of population statistics
+- `results/summary_run_XXX.png`: Summary plots
+- `results/simulation_run_XXX.gif`: Animated simulation visualization
+- `snapshots_run_XXX/`: Individual PNG frames
+
+---
+
+## Key Parameters to Tune
+
+| Parameter | File | Effect |
+|-----------|------|--------|
+| `INIT_POP_SIZE` | constants.py | Starting population size |
+| `INFECTIVITY1`, `INFECTIVITY2` | constants.py | Disease transmission rates |
+| `LATENCY`, `INCUBATION` | constants.py | Disease progression timing |
+| `MORTALITY` | constants.py | Base death rate |
+| `STATS_INTERVAL` | main.py | Data collection frequency |
+| `PRINT_INTERVAL` | main.py | Console output frequency |
