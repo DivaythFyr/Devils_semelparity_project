@@ -2,7 +2,7 @@
 # not specialized like, for instance, infection.py
 
 from constants import *
-from state import SimulationState
+from state import SimulationState, SimulationStats
 import torch as th
 from torch import Tensor
 from physics import *
@@ -718,221 +718,68 @@ def process_all_deaths(
 
 
 
-# INDIVIDUAL DEATH FUNCTIONS (KEPT FOR TESTING/DEBUGGING)
-# These functions are retained for individual testing but should not be used in production.
-# Use process_all_deaths() instead for better performance.
-# def death_by_age(state: SimulationState, day_in_year: int = -1) -> None:
-#     """
-#     Removes individuals who exceed MAX_AGE.
-#     """
-#     n = state.pop_size
-#     indices = th.nonzero(state.age[:n] > MAX_AGE, as_tuple=True)[0]
-#     delete_animal(state, indices)
+def check_simulation_stop(
+    state: SimulationState,
+    current_time: int,
+    max_time: int = 42000,
+    max_age: int = MAX_AGE
+) -> bool:
+    """
+    Check whether the simulation should stop.
 
+    Conditions:
+        1. Population extinct → stop immediately (reason: "extinction").
+        2. 100% semelparous fixation → stop after MAX_AGE * 2 additional timesteps (reason: "semelparous").
+        3. 100% iteroparous fixation → stop after MAX_AGE * 2 additional timesteps (reason: "iteroparous").
+        4. Reached maximum simulation time → stop (reason: "out_of_time").
+        5. Otherwise → continue.
 
-# def death_by_no_territory(
-#     state: SimulationState,
-#     day_in_year: int = -1,
-#     dispersal_deadline: int = DISPERSAL_DEADLINE,
-#     maturity_age: int = AGE_JUVENILE_TO_ADULT
-# ) -> None:
-#     """
-#     Removes juveniles without territory based on probabilistic death.
-    
-#     Death probability increases with:
-#     1. Lower fitness (fitness_factor = 1 - fitness/100)
-#     2. Time past dispersal deadline (age_over_deadline)
-    
-#     Mandatory death at age >= maturity_age.
-    
-#     Args:
-#         state: SimulationState object to update in-place.
-#         day_in_year: Current day in the annual cycle (default: -1, meaning not specified).
-#         dispersal_deadline: Age after which death probability starts (default: DISPERSAL_DEADLINE).
-#         maturity_age: Age at which mandatory death occurs (default: AGE_JUVENILE_TO_ADULT).
-#     """
-#     n = state.pop_size
-#     if n == 0:
-#         return
+    Args:
+        state: SimulationState object.
+        current_time: Current simulation timestep.
+        max_time: Maximum number of simulation timesteps (default: TIMEPOINTS).
+        max_age: Maximum age constant used to calculate the waiting period.
 
-#     # Find juveniles without territory
-#     juv_no_terr_mask = state.status[:n] == STATUS_JUVENILE_NO_TERR
-    
-#     if not juv_no_terr_mask.any():
-#         return
+    Returns:
+        should_stop (bool): True if simulation should end.
+    """
+    pop_size: int = state.pop_size
+    waiting_period: int = max_age * 2
 
-#     # Get ages and fitness for juveniles without territory
-#     ages = state.age[:n]
-#     fitness = state.fitness[:n]
+    # --- Condition 1: Extinction ---
+    if pop_size == 0:
+        state.stoppage_reason = "extinction"
+        return True
 
-#     # ==================== MANDATORY DEATH AT MATURITY AGE ====================
-#     # Juveniles without territory who reach maturity age die immediately
-#     mandatory_death_mask = juv_no_terr_mask & (ages >= maturity_age)
-#     # ==================== END MANDATORY DEATH ====================
+    # --- Condition 4: Out of time ---
+    if current_time >= max_time - 1:
+        state.stoppage_reason = "outOfTime"
+        return True
 
-#     # ==================== PROBABILISTIC DEATH ====================
-#     # For those past dispersal deadline but before maturity
-#     prob_death_candidates = juv_no_terr_mask & (ages > dispersal_deadline) & (ages < maturity_age)
-    
-#     if prob_death_candidates.any():
-#         # fitness_factor: lower fitness = higher death chance
-#         # fitness_factor = 1 - (Fitness / 100), clamped to [0, 1]
-#         fitness_factor = th.clamp(1.0 - (fitness / 100.0), min=0.0, max=1.0)
-        
-#         # age_over_deadline: how far past the deadline (normalized)
-#         # age_over_deadline = (Age - dispersal_deadline) / (maturity_age - dispersal_deadline)
-#         age_range = float(maturity_age - dispersal_deadline)
-#         age_over_deadline = (ages.float() - dispersal_deadline) / age_range
-#         age_over_deadline = th.clamp(age_over_deadline, min=0.0, max=1.0)
-        
-#         # Death probability = fitness_factor * age_over_deadline
-#         death_prob = fitness_factor * age_over_deadline
-        
-#         # Apply probability only to candidates
-#         rand_vals = th.rand(n, device=state.x.device)
-#         prob_death_mask = prob_death_candidates & (rand_vals < death_prob)
-#     else:
-#         prob_death_mask = th.zeros(n, dtype=th.bool, device=state.x.device)
-#     # ==================== END PROBABILISTIC DEATH ====================
+    # --- Calculate genotype fractions ---
+    chrom_sum: th.Tensor = state.chrom_a[:pop_size].sum(dim=1)
+    semel_count: int = int((chrom_sum == 2).sum().item())
+    iterop_count: int = int((chrom_sum == 0).sum().item())
 
-#     # Combine mandatory and probabilistic death
-#     death_mask = mandatory_death_mask | prob_death_mask
+    semel_frac: float = semel_count / pop_size
+    iterop_frac: float = iterop_count / pop_size
 
-#     if death_mask.any():
-#         indices_to_remove = th.nonzero(death_mask, as_tuple=True)[0]
-#         delete_animal(state, indices_to_remove)
+    is_fixed: bool = (semel_frac >= SEMELPAROUS_WIN_PROPORTION) or (iterop_frac >= ITEROPAROUS_WIN_PROPORTION)
 
+    if is_fixed:
+        # First time fixation is detected — record the timestep
+        if state.fixation_time is None:
+            state.fixation_time = current_time
 
-# def death_by_infection(state: SimulationState, day_in_year: int = -1) -> None:
-#     """
-#     Removes individuals who die from infection under status == 2.
-#     """
-#     n = state.pop_size
-#     # Example: infection_status == 2 means dead from infection
-#     indices = th.nonzero(state.infection_status[:n] == 2, as_tuple=True)[0]
-    
-#     delete_animal(state, indices)
+        # --- Conditions 2 & 3: Fixation + waited long enough ---
+        elapsed: int = current_time - state.fixation_time
+        if elapsed >= waiting_period:
+            fixation_type: str = "semelparous" if semel_frac >= SEMELPAROUS_WIN_PROPORTION else "iteroparous"
+            state.stoppage_reason = fixation_type
+            return True
+    else:
+        # Fixation was lost (e.g. mutation or offspring changed ratio) — reset
+        state.fixation_time = None
 
-# def death_by_base_mortality(
-#     state: SimulationState,
-#     base_mortality: float = MORTALITY,
-#     day_in_year: int = -1
-# ) -> None:
-#     """
-#     Apply probabilistic death based on natural mortality rate.
-#     Applies to all individuals regardless of infection status.
-    
-#     Args:
-#         state: SimulationState object to update in-place.
-#         base_mortality: Base natural death rate for all individuals (default: MORTALITY).
-#     """
-#     n = state.pop_size
-#     if n == 0:
-#         return
-
-#     # Probabilistic death based on base mortality
-#     rand_vals = th.rand(n, device=state.x.device)
-#     death_mask = rand_vals < base_mortality
-
-#     if death_mask.any():
-#         indices_to_remove = th.nonzero(death_mask, as_tuple=True)[0]
-#         delete_animal(state, indices_to_remove)
-
-
-# def death_by_disease_probability(
-#     state: SimulationState,
-#     day_in_year: int = -1,
-#     disease_mortality_factor: float = 0.1,
-#     latency: int = LATENCY,
-#     incubation: int = INCUBATION
-# ) -> None:
-#     """
-#     Apply probabilistic death for infected individuals based on disease progression.
-#     Infected individuals (infection_status == 1) have death probability
-#     that grows with age_of_disease using a sigmoid function.
-    
-#     This matches the disease mortality logic in devils_with_kids.py:
-#     disease_death = 0.1 / (1 + exp(10 * ((latency / 2) + incubation - AgeOfDisease) / latency))
-    
-#     Args:
-#         state: SimulationState object to update in-place.
-#         disease_mortality_factor: Death rate factor for infected (default: 0.1).
-#         latency: Latency period of disease in days (default: LATENCY).
-#         incubation: Incubation period of disease in days (default: INCUBATION).
-#     """
-#     n = state.pop_size
-#     if n == 0:
-#         return
-
-#     # Identify infected individuals (infection_status == 1)
-#     infected_mask = state.infection_status[:n] == 1
-
-#     if not infected_mask.any():
-#         return
-
-#     # Get age of disease for all individuals
-#     age_of_disease = state.age_of_disease[:n]
-
-#     # Sigmoid function: increases death probability as age_of_disease increases
-#     disease_death_rate = disease_mortality_factor / (
-#         1.0 + th.exp(10.0 * ((latency / 2.0) + incubation - age_of_disease) / latency)
-#     )
-
-#     # Apply disease mortality only for infected individuals
-#     death_prob = infected_mask.float() * disease_death_rate
-
-#     # Probabilistic death
-#     rand_vals = th.rand(n, device=state.x.device)
-#     death_mask = rand_vals < death_prob
-
-#     if death_mask.any():
-#         indices_to_remove = th.nonzero(death_mask, as_tuple=True)[0]
-#         delete_animal(state, indices_to_remove)
-        
-
-# def death_by_reproduction_semelparity(
-#     state: SimulationState,
-#     day_in_year: int = -1,
-#     death_day: int = 10
-# ) -> None:
-#     """
-#     Kill semelparous males who mated, on a specific day of the year.
-#     Semelparous males have chrom_a sum == 2 (both alleles = 1).
-#     They die on day 10 if they participated in mating (mated_male == True).
-    
-#     Matches logic from devils_with_kids.py TimeRunAndDeath():
-#     - Day 10: semelparous males who mated die
-    
-#     Args:
-#         state: SimulationState object to update in-place.
-#         day_in_year: Current day in the annual cycle (0-119).
-#         death_day: Day on which mated semelparous males die (default: 10).
-#     """
-#     if day_in_year != death_day:
-#         return
-    
-#     n = state.pop_size
-#     if n == 0:
-#         return
-    
-#     # Semelparous males: chrom_a sum == 2 (both alleles are 1)
-#     is_semelparous = state.chrom_a[:n].sum(dim=1) == 2
-    
-#     # Males: sex == True (1)
-#     is_male = state.sex[:n] == True
-    
-#     # Mated: mated_male == True
-#     has_mated = state.mated_male[:n] == True
-    
-#     # Combine all conditions
-#     death_mask = is_semelparous & is_male & has_mated
-    
-#     if not death_mask.any():
-#         return
-    
-#     indices_to_remove = th.nonzero(death_mask, as_tuple=True)[0]
-#     delete_animal(state, indices_to_remove)
-
-
-
-  
+    # --- Condition 5: Continue ---
+    return False

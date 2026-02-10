@@ -10,7 +10,7 @@ from visualisation import *
 import argparse
 
 # ---- TIME CONFIG ----
-TIMEPOINTS: int = 42000           
+TIMEPOINTS: int = 1500         
 # Total simulated days (iterations in main loop). Used in: main().
 
 
@@ -80,10 +80,8 @@ def main(
             breeding_days=BREEDING_DAYS,
             device=DEVICE
         )
-        
         timings["infection_spread"] += time.perf_counter() - t0
-
-
+        
         # --- Reproduction ---
         t0 = time.perf_counter()
         if day_in_year < BREEDING_DAYS:
@@ -146,24 +144,12 @@ def main(
 
         # --- Stoppage logic ---
         t0 = time.perf_counter()
-        pop_size = simulation_state.pop_size
-        if pop_size == 0:
-            print("Simulation stopped: extinction.")
-            break
-        
-        # Count genotypes for ALL individuals
-        chrom_sum = simulation_state.chrom_a[:pop_size].sum(dim=1)
-        semel_count = (chrom_sum == 2).sum().item()
-        iterop_count = (chrom_sum == 0).sum().item()
-        
-        semel_frac: float = semel_count / pop_size
-        iterop_frac: float = iterop_count / pop_size
-        
-        if semel_frac >= STOPPAGE_SEMELPARITY_PROPORTION_CONDITION:
-            print(f"Simulation stopped: {STOPPAGE_SEMELPARITY_PROPORTION_CONDITION * 100:.1f}% semelparity fixation at t={t}.")
-            break
-        elif iterop_frac >= STOPPAGE_ITEROPAROUS_PROPORTION_CONDITION:
-            print(f"Simulation stopped: {STOPPAGE_ITEROPAROUS_PROPORTION_CONDITION * 100:.1f}% iteroparity fixation at t={t}.")
+        if check_simulation_stop(
+            state=simulation_state,
+            current_time=simulation_state.current_time,
+            max_time=TIMEPOINTS,
+        ):
+            print(f"⏹️ Simulation stopped at t={simulation_state.current_time} (reason: {simulation_state.stoppage_reason})")
             break
         
         timings["stoppage_logic"] += time.perf_counter() - t0
@@ -206,6 +192,9 @@ def main(
         gif_name=gif_name,  # Use custom GIF filename
         duration=0.5
     )
+    
+    # Print stoppage reason in a parseable format for run_multiple_experiments.py
+    print(f"STOPPAGE_REASON:{simulation_state.stoppage_reason}")
 
     # --- BENCHMARK SUMMARY ---
     print("\n=== BENCHMARK SUMMARY ===")

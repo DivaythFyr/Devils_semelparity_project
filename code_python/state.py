@@ -84,6 +84,9 @@ class SimulationState:
     pending_offspring_mother_id: Tensor      # [MAX_PENDING] int64
     pending_offspring_count: int = 0
     # ==================== END PENDING OFFSPRING ====================
+    
+    stoppage_reason: Optional[str] = None  # Added field for stoppage reason (e.g. "semelparous fixation", "iteroparous fixation", "max age reached")
+    fixation_time: Optional[int] = None  # Added field to track when fixation was first detected
 
 
 def create_initial_state(
@@ -193,6 +196,8 @@ class SimulationStats:
     infectivity1: float
     infectivity2: float
     run_id: int
+    
+    
 
 def collect_statistics(
     state: SimulationState,

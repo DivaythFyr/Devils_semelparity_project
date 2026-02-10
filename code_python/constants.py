@@ -7,8 +7,6 @@ DEVICE: th.device = th.device("cuda" if th.cuda.is_available() else "cpu")
 # Target device for all tensors. Used in: create_initial_state(), seed_pathogen(), 
 # infection_spread(), replication(), calculate_chrom(), move(), all tensor operations.
 
-
-
 TIME_OF_PATHOGEN: int = 0         
 # Day when pathogen is first introduced. Used in: main() for conditional seeding.
 # NOTE: Currently main.py seeds when no one is infected; consider using this constant.
@@ -121,11 +119,11 @@ STOPPAGE_ITEROPAROUS_PROPORTION_CONDITION: float = 0.999
 # Used in: main() (stoppage logic).
 
 # ---- INFECTION ----
-INFECTIVITY1: float = 3   
+INFECTIVITY1: float = 0.5
 # Sexual transmission probability parameter (during breeding season, adults only, phase 1). 
 # Used in: infection_spread().
 
-INFECTIVITY2: float = 0.01  
+INFECTIVITY2: float = 0.5
 # Nonsexual (contact) transmission probability parameter (all residents, all phases). 
 # Used in: infection_spread().
 
@@ -217,23 +215,8 @@ AGE_JUVENILE_TO_ADULT: int = 220
 SEMELPAROUS_DEATH_DAY: int = 10 # Days after breeding when semelparous adults die.  
 # Used in: process_all_deaths().
 
-# ---- OUTPUT DIRECTORIES ----
-RESULTS_DIR: str = "monte_carlo_results"    
-# Directory for CSV / summary outputs. 
-# Used in: main() (create_output_folders), run_monte_carlo_simulation().
-# NOTE: Currently main.py uses hardcoded "../output"; consider using this constant.
 
-STATS_DIR: str = "monte_carlo_stats"        
-# Directory for detailed statistics per run. 
-# Used in: setup_stats_file(), save_statistics_to_file().
-# NOTE: Currently not used in modular code; consider integrating.
+## Proportions for stoppage logic
+SEMELPAROUS_WIN_PROPORTION: float = 0.99
+ITEROPAROUS_WIN_PROPORTION: float = 0.99
 
-GIFS_DIR: str = "simulation_gifs"           
-# Directory for rendered GIF animations. 
-# Used in: create_gif_from_snapshots().
-# NOTE: Currently not used; output folder is passed as argument.
-
-SNAPSHOTS_DIR: str = "simulation_snapshots" 
-# Directory for PNG snapshot frames. 
-# Used in: draw_snapshot().
-# NOTE: Currently not used; output folder is passed as argument.
