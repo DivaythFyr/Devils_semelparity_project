@@ -8,6 +8,18 @@ import time
 import pandas as pd
 from visualisation import *
 import argparse
+import sys
+
+#for fix UnicodeEncodeError on Windows consoles (cp1252)
+def _configure_stdout() -> None:
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            # Avoid UnicodeEncodeError on Windows consoles (cp1252).
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
+_configure_stdout()
 
 # ---- TIME CONFIG ----
 TIMEPOINTS: int = 42000     
