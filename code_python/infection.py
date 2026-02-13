@@ -2,7 +2,7 @@ from constants import *
 from state import SimulationState
 import torch as th
 from torch import Tensor
-import math
+
 
 def calculate_transmission_probability(
     state: SimulationState,
