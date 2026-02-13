@@ -4,6 +4,17 @@ import itertools
 from constants import *  # Import parameters from constants.py
 import sys
 
+#for fix UnicodeEncodeError on Windows consoles (cp1252)
+# def _configure_stdout() -> None:
+#     if hasattr(sys.stdout, "reconfigure"):
+#         try:
+#             # Avoid UnicodeEncodeError on Windows consoles (cp1252).
+#             sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+#         except Exception:
+#             pass
+
+# _configure_stdout()
+
 # Define the ranges for INFECTIVITY1 and INFECTIVITY2
 INFECTIVITY1_values: list[float] = [0.0, 0.005, 0.01, 0.05, 0.1,  0.5,   1.0, 2.0, 3.0, 4.0, 5.0]
 INFECTIVITY2_values: list[float] = [ 0.0, 0.005, 0.01, 0.02, 0.03, 0.04, 0.05, 0.1, 0.5]

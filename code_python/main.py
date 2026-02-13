@@ -8,6 +8,18 @@ import time
 import pandas as pd
 from visualisation import *
 import argparse
+import sys
+
+#for fix UnicodeEncodeError on Windows consoles (cp1252)
+# def _configure_stdout() -> None:
+#     if hasattr(sys.stdout, "reconfigure"):
+#         try:
+#             # Avoid UnicodeEncodeError on Windows consoles (cp1252).
+#             sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+#         except Exception:
+#             pass
+
+# _configure_stdout()
 
 # ---- TIME CONFIG ----
 TIMEPOINTS: int = 42000     
@@ -18,7 +30,6 @@ def main(
     infectivity1: float = INFECTIVITY1,
     infectivity2: float = INFECTIVITY2,
     base_output_folder: str = "../output",
-    gif_name: str = "simulation_run_000.gif",
     stats_name: str = "simulation_stats.csv"
 ) -> None:
     # Override constants with provided values

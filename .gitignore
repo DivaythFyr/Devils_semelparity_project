@@ -56,3 +56,4 @@ versions/
 __pycache__
 
 .DS_Store
+store_results/
