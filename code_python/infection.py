@@ -50,19 +50,19 @@ def calculate_transmission_probability(
     transmitter_sexual_allowed_mask = th.zeros(num_transmitters, dtype=th.bool, device=device)
     transmitter_contact_allowed_mask = th.zeros(num_transmitters, dtype=th.bool, device=device)
     
-    # Стадия 1
+    # Stage 1
     if STAGE1_CAN_TRANSMIT_SEXUAL:
         transmitter_sexual_allowed_mask[stage1_mask] = True
     if STAGE1_CAN_TRANSMIT_CONTACT:
         transmitter_contact_allowed_mask[stage1_mask] = True
     
-    # Стадия 2
+    # Stage 2
     if STAGE2_CAN_TRANSMIT_SEXUAL:
         transmitter_sexual_allowed_mask[stage2_mask] = True
     if STAGE2_CAN_TRANSMIT_CONTACT:
         transmitter_contact_allowed_mask[stage2_mask] = True
     
-    # Стадия 3
+    # Stage 3
     if STAGE3_CAN_TRANSMIT_SEXUAL:
         transmitter_sexual_allowed_mask[stage3_mask] = True
     if STAGE3_CAN_TRANSMIT_CONTACT:
@@ -72,11 +72,11 @@ def calculate_transmission_probability(
     sexual_component = th.zeros((num_susceptibles, num_transmitters), device=device)
     
     if day_in_year < breeding_days:
-        # Определяем, кто взрослый
+        # Determine who is adult
         transmitter_adult_mask = state.status[transmitter_indices] == STATUS_ADULT
         susceptible_adult_mask = state.status[susceptible_indices] == STATUS_ADULT
         
-        # Создаем маску для пар, где ОБА взрослые И передатчик может передавать половым путем
+        # Create mask for pairs where BOTH are adults AND transmitter can transmit sexually
         adult_pair_mask = transmitter_adult_mask.unsqueeze(0) & \
                          susceptible_adult_mask.unsqueeze(1) & \
                          transmitter_sexual_allowed_mask.unsqueeze(0)
@@ -84,13 +84,13 @@ def calculate_transmission_probability(
         sexual_component[adult_pair_mask] = infectivity1
     
     # ==================== 5. NONSEXUAL COMPONENT ====================
-    # Контактная передача всегда доступна (но с разными множителями по стадиям)
+    # Contact transmission is always available (but with different multipliers by stages)
     nonsexual_component = th.zeros((num_susceptibles, num_transmitters), device=device)
     
-    # Создаем матричную маску для пар, где передатчик может передавать контактным путем
+    # Create matrix mask for pairs where transmitter can transmit by contact
     contact_allowed_matrix = transmitter_contact_allowed_mask.unsqueeze(0).expand(num_susceptibles, -1)
     
-    # Применяем базовую вероятность контактной передачи
+    # Apply base probability of contact transmission
     nonsexual_component[contact_allowed_matrix] = infectivity2
     
     # ==================== 6. COMBINE ALL COMPONENTS ====================
@@ -112,25 +112,25 @@ def infection_spread(
     device: th.device = DEVICE
 ) -> None:
     """
-    Распространение инфекции по новой формуле:
+    Spread of infection by new formula:
     
-    Вероятность = StageMultiplier × DistanceFactor × (SexualComponent + NonsexualComponent)
+    Probability = StageMultiplier × DistanceFactor × (SexualComponent + NonsexualComponent)
     
-    Где:
-    - StageMultiplier: 0.1 (стадия 1), 5.0 (стадия 2), 10.0 (стадия 3)
-    - DistanceFactor: (MAX_RADIUS_SQ - dist^2) / MAX_RADIUS_SQ, от 0 до 1
-    - SexualComponent: infectivity1 (только в сезон размножения, только взрослые)
-    - NonsexualComponent: infectivity2 (всегда, но зависит от стадии)
+    Where:
+    - StageMultiplier: 0.1 (stage 1), 5.0 (stage 2), 10.0 (stage 3)
+    - DistanceFactor: (MAX_RADIUS_SQ - dist^2) / MAX_RADIUS_SQ, from 0 to 1
+    - SexualComponent: infectivity1 (only during breeding season, only adults)
+    - NonsexualComponent: infectivity2 (always, but depends on stage)
     
     Args:
         state: SimulationState object to modify
         distance_sq: Pre-calculated [N, N] squared distance matrix
         day_in_year: Current day in annual cycle
-        infectivity1: Базовая вероятность половой передачи
-        infectivity2: Базовая вероятность неполовой передачи
-        stage1_multiplier: Множитель для латентной стадии
-        stage2_multiplier: Множитель для инфекционной стадии
-        stage3_multiplier: Множитель для терминальной стадии
+        infectivity1: Base probability of sexual transmission
+        infectivity2: Base probability of non-sexual transmission
+        stage1_multiplier: Multiplier for latent stage
+        stage2_multiplier: Multiplier for infectious stage
+        stage3_multiplier: Multiplier for terminal stage
         breeding_days: Number of days for breeding season
         device: Torch device
     """
@@ -138,20 +138,20 @@ def infection_spread(
     if n == 0:
         return
 
-    # ==================== 1. ИНИЦИАЛИЗАЦИЯ ДЛИТЕЛЬНОСТЕЙ ДЛЯ НОВЫХ ЗАРАЖЕННЫХ ====================
+    # ==================== 1. INITIALIZATION OF DURATIONS FOR NEWLY INFECTED ====================
     newly_infected_mask = (state.infection_stage[:n] == INFECTION_STAGE_LATENT) & \
                           (state.stage1_duration[:n] == 0)
     if newly_infected_mask.any():
         newly_infected_indices = th.nonzero(newly_infected_mask, as_tuple=True)[0]
         initialize_disease_durations(state, newly_infected_indices, device)
 
-    # ==================== 2. ПРОГРЕССИЯ БОЛЕЗНИ ====================
-    # Увеличиваем возраст болезни у всех инфицированных
+    # ==================== 2. DISEASE PROGRESSION ====================
+    # Increase disease age for all infected
     infected_mask = state.infection_stage[:n] > 0
     state.age_of_disease[:n] += infected_mask.to(state.age_of_disease.dtype)
     
-    # Переход между стадиями
-    # Стадия 1 → Стадия 2
+    # Transition between stages
+    # Stage 1 → Stage 2
     stage1_mask = state.infection_stage[:n] == INFECTION_STAGE_LATENT
     transition_to_stage2 = stage1_mask & (state.age_of_disease[:n] >= state.stage1_duration[:n])
     
@@ -162,7 +162,7 @@ def infection_spread(
             state.infection_stage[:n]
         )
     
-    # Стадия 2 → Стадия 3
+    # Stage 2 → Stage 3
     stage2_mask = state.infection_stage[:n] == INFECTION_STAGE_INFECTIOUS
     transition_to_stage3 = stage2_mask & \
                           (state.age_of_disease[:n] >= (state.stage1_duration[:n] + state.stage2_duration[:n]))
@@ -174,14 +174,14 @@ def infection_spread(
             state.infection_stage[:n]
         )
 
-    # ==================== 3. ОПРЕДЕЛЕНИЕ КТО МОЖЕТ ПЕРЕДАВАТЬ/ПОЛУЧАТЬ ====================
-    # Только резиденты могут передавать/получать инфекцию
+    # ==================== 3. DETERMINING WHO CAN TRANSMIT/RECEIVE ====================
+    # Only residents can transmit/receive infection
     resident_mask = (state.status[:n] == STATUS_ADULT) | (state.status[:n] == STATUS_JUVENILE_TERR)
     
-    # КТО МОЖЕТ ПЕРЕДАВАТЬ: резиденты на стадиях 1, 2 или 3
+    # WHO CAN TRANSMIT: residents in stages 1, 2 or 3
     can_transmit_mask = resident_mask & (state.infection_stage[:n] > 0)
     
-    # КТО МОЖЕТ ЗАРАЖАТЬСЯ: здоровые резиденты
+    # WHO CAN BE INFECTED: healthy residents
     can_be_infected_mask = resident_mask & (state.infection_stage[:n] == INFECTION_STAGE_HEALTHY)
     
     transmitters = th.nonzero(can_transmit_mask, as_tuple=True)[0]
@@ -190,11 +190,11 @@ def infection_spread(
     if transmitters.numel() == 0 or susceptibles.numel() == 0:
         return
     
-    # ==================== 4. ВЫЧИСЛЕНИЕ МАТРИЦЫ ВЕРОЯТНОСТЕЙ ====================
-    # Извлекаем подматрицу расстояний [susceptibles, transmitters]
+    # ==================== 4. CALCULATION OF PROBABILITY MATRIX ====================
+    # Extract distance submatrix [susceptibles, transmitters]
     dist_sq_subset = distance_sq[susceptibles][:, transmitters]
     
-    # Рассчитываем матрицу вероятностей
+    # Calculate probability matrix
     prob_matrix = calculate_transmission_probability(
         state=state,
         transmitter_indices=transmitters,
@@ -210,12 +210,12 @@ def infection_spread(
         device=device
     )
     
-    # ==================== 5. ПРИМЕНЕНИЕ ВЕРОЯТНОСТЕЙ ДЛЯ ЗАРАЖЕНИЯ ====================
-    # Для каждого восприимчивого берем максимальную вероятность от всех передатчиков
+    # ==================== 5. APPLICATION OF PROBABILITIES FOR INFECTION ====================
+    # For each susceptible, take the maximum probability from all transmitters
     if prob_matrix.numel() > 0:
         max_probs, _ = prob_matrix.max(dim=1)  # [num_susceptibles]
         
-        # Случайное испытание для каждого восприимчивого
+        # Random trial for each susceptible
         random_draws = th.rand(max_probs.shape[0], device=device)
         newly_infected_mask = (random_draws < max_probs) & (max_probs > 0)
         
@@ -227,7 +227,7 @@ def infection_spread(
             state.num_infection += new_indices.numel()
 
 
-# ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (остаются без изменений) ====================
+# ==================== AUXILIARY FUNCTIONS (remain unchanged) ====================
 
 def initialize_disease_durations(
     state: SimulationState,
@@ -235,13 +235,13 @@ def initialize_disease_durations(
     device: th.device = DEVICE
 ) -> None:
     """
-    Инициализирует случайные длительности стадий болезни для новых заражённых.
+    Initializes random durations of disease stages for newly infected.
     """
     num_new = infected_indices.shape[0]
     if num_new == 0:
         return
     
-    # Стадия 1: Латентная (0.5-1.0 года)
+    # Stage 1: Latent (0.5-1.0 years)
     stage1_durations = th.randint(
         low=STAGE1_DURATION_MIN,
         high=STAGE1_DURATION_MAX + 1,
@@ -250,7 +250,7 @@ def initialize_disease_durations(
         dtype=th.float32
     )
     
-    # Стадия 2: Инфекционная (0.25-1.0 года)
+    # Stage 2: Infectious (0.25-1.0 years)
     stage2_durations = th.randint(
         low=STAGE2_DURATION_MIN,
         high=STAGE2_DURATION_MAX + 1,
@@ -259,7 +259,7 @@ def initialize_disease_durations(
         dtype=th.float32
     )
     
-    # Стадия 3: Терминальная (0.5-1.0 года)
+    # Stage 3: Terminal (0.5-1.0 years)
     stage3_durations = th.randint(
         low=STAGE3_DURATION_MIN,
         high=STAGE3_DURATION_MAX + 1,
@@ -268,7 +268,7 @@ def initialize_disease_durations(
         dtype=th.float32
     )
     
-    # Устанавливаем длительности
+    # Set durations
     state.stage1_duration[infected_indices] = stage1_durations
     state.stage2_duration[infected_indices] = stage2_durations
     state.stage3_duration[infected_indices] = stage3_durations
@@ -307,20 +307,20 @@ def seed_pathogen(
     # Randomly select unique residents to infect
     selected_indices = resident_indices[th.randperm(resident_indices.numel(), device=device)[:num_to_infect]]
 
-    # ==================== РАСПРЕДЕЛЕНИЕ ПО СТАДИЯМ ====================
-    # Случайно распределяем стадии: ~40% латентные, ~40% инфекционные, ~20% терминальные
-    num_latent = int(num_to_infect * 0.4)  # ~4 особи: стадия 1
-    num_infectious = int(num_to_infect * 0.4)  # ~4 особи: стадия 2
-    num_terminal = num_to_infect - num_latent - num_infectious  # ~2 особи: стадия 3
+    # ==================== DISTRIBUTION BY STAGES ====================
+    # Randomly distribute stages: ~40% latent, ~40% infectious, ~20% terminal
+    num_latent = int(num_to_infect * 0.4)  # ~4 individuals: stage 1
+    num_infectious = int(num_to_infect * 0.4)  # ~4 individuals: stage 2
+    num_terminal = num_to_infect - num_latent - num_infectious  # ~2 individuals: stage 3
     
-    # Перемешиваем индексы для случайного распределения
+    # Shuffle indices for random distribution
     permuted_indices = selected_indices[th.randperm(num_to_infect, device=device)]
     
-    # Присваиваем стадии
+    # Assign stages
     if num_latent > 0:
         latent_indices = permuted_indices[:num_latent]
         state.infection_stage[latent_indices] = INFECTION_STAGE_LATENT
-        state.age_of_disease[latent_indices] = 0  # Начинают с 0 дней
+        state.age_of_disease[latent_indices] = 0  # Start with 0 days
         initialize_disease_durations(state, latent_indices, device)
     
     if num_infectious > 0:
@@ -329,9 +329,9 @@ def seed_pathogen(
         infectious_indices = permuted_indices[infectious_start:infectious_end]
         state.infection_stage[infectious_indices] = INFECTION_STAGE_INFECTIOUS
         
-        # Для инфекционных ставим случайный возраст болезни (уже в середине стадии 1 или начале стадии 2)
+        # For infectious, set random disease age (already in the middle of stage 1 or beginning of stage 2)
         for idx in infectious_indices:
-            # Случайная длительность стадии 1 (180-360 дней)
+            # Random duration of stage 1 (180-360 days)
             stage1_duration = th.randint(
                 STAGE1_DURATION_MIN,
                 STAGE1_DURATION_MAX + 1,
@@ -339,7 +339,7 @@ def seed_pathogen(
             )
             state.stage1_duration[idx] = stage1_duration
             
-            # Возраст болезни: где-то в стадии 2 (прошли всю стадию 1 + часть стадии 2)
+            # Disease age: somewhere in stage 2 (passed entire stage 1 + part of stage 2)
             age_in_stage1 = stage1_duration * th.rand((1,), device=device) * 0.2 + stage1_duration * 0.8
             state.age_of_disease[idx] = age_in_stage1
     
@@ -348,9 +348,9 @@ def seed_pathogen(
         terminal_indices = permuted_indices[terminal_start:]
         state.infection_stage[terminal_indices] = INFECTION_STAGE_TERMINAL
         
-        # Для терминальных ставим случайный возраст (уже в стадии 3)
+        # For terminal, set random age (already in stage 3)
         for idx in terminal_indices:
-            # Случайные длительности всех стадий
+            # Random durations of all stages
             stage1_duration = th.randint(
                 STAGE1_DURATION_MIN,
                 STAGE1_DURATION_MAX + 1,
@@ -371,7 +371,7 @@ def seed_pathogen(
             state.stage2_duration[idx] = stage2_duration
             state.stage3_duration[idx] = stage3_duration
             
-            # Возраст болезни: прошли стадии 1 и 2 + часть стадии 3
+            # Disease age: passed stages 1 and 2 + part of stage 3
             total_stage12 = stage1_duration + stage2_duration
             age_in_stage3 = stage3_duration * th.rand((1,), device=device) * 0.4 + stage3_duration * 0.3
             state.age_of_disease[idx] = total_stage12 + age_in_stage3
@@ -379,4 +379,4 @@ def seed_pathogen(
     # Update infection count
     state.num_infection += num_to_infect
     
-    print(f"🎲 Начальное заражение: {num_latent} латентных, {num_infectious} инфекционных, {num_terminal} терминальных")
+    print(f"🎲 Initial infection: {num_latent} latent, {num_infectious} infectious, {num_terminal} terminal")

@@ -18,23 +18,23 @@ import shutil
 import glob
 
 
-# Глобальные переменные для конфигурации
+# Global variables for configuration
 if th.cuda.is_available():
     dev = "cuda:0"
 else:
     dev = "cpu"
 
 device = th.device(dev)
-print(f"Устройство: {device}")
+print(f"Device: {device}")
 
-# Конфигурация Monte Carlo
-MONTE_CARLO_RUNS = 2  # Количество симуляций
+# Monte Carlo configuration
+MONTE_CARLO_RUNS = 2  # Number of simulations
 PARAM_RANGES = {
-    'I1': (0, 7),     # Infectivity1 от 0 до 7
-    'I2': (0, 0.05)   # Infectivity2 от 0 до 0.05
+    'I1': (0, 7),     # Infectivity1 from 0 to 7
+    'I2': (0, 0.05)   # Infectivity2 from 0 to 0.05
 }
 
-# Остальные параметры 
+# Other parameters 
 time_draw = [10, 6000, 12000, 18000, 24000, 30000, 36000, 42000]
 Timepoints = 42001
 CurrentTime = 0
@@ -66,16 +66,16 @@ time_near_edge = None
 stats_file = None
 csv_writer = None
 run_id = 0
-# В разделе глобальных переменных добавьте:
+# In the global variables section add:
 f_a = None
 m_a = None
 f_sex = None
 m_sex = None
-# В раздел глобальных переменных добавьте:
+# In the global variables section add:
 reproducing_female_indices = None
 reproducing_female_coords = None
 reproducing_female_genos = None
-# В начало файла добавьте:
+# Add to the beginning of the file:
 female_genotypes_memory = None
 female_coords_memory = None
 chrom_cal_female_indices = None
@@ -83,31 +83,31 @@ reproduction_pairs_log = None
 reproduction_pairs = []  
 
 animal_ids = None
-next_animal_id = 0  # Счетчик для уникальных ID
-id_to_index = {}    # Словарь для быстрого поиска индекса по ID (только на CPU!)
+next_animal_id = 0  # Counter for unique IDs
+id_to_index = {}    # Dictionary for fast index lookup by ID (CPU only!)
 
 
-# Добавляем в глобальные переменные
-female_ids_in_matrix = None  # ID самок в матрице размножения
-male_ids_in_matrix = None    # ID самцов в матрице размножения
+# Add to global variables
+female_ids_in_matrix = None  # Female IDs in reproduction matrix
+male_ids_in_matrix = None    # Male IDs in reproduction matrix
 
-# Создаем глобальные константы для путей
+# Create global constants for paths
 RESULTS_DIR = "monte_carlo_results"
 STATS_DIR = "monte_carlo_stats"
 GIFS_DIR = "simulation_gifs"
 SNAPSHOTS_DIR = "simulation_snapshots"
 
 
-# В разделе глобальных переменных добавьте после других переменных:
-territory_center_x = None  # Центр территории по X
-territory_center_y = None  # Центр территории по Y
-territory_radius = Range   # Радиус территории (используем существующий Range)
+# In the global variables section add after other variables:
+territory_center_x = None  # Territory center by X
+territory_center_y = None  # Territory center by Y
+territory_radius = Range   # Territory radius (use existing Range)
 
-# ==================== КОНСТАНТЫ ДЛЯ НОВОЙ СИСТЕМЫ СТАТУСОВ ====================
-STATUS_CHILD = 0           # 0-159 дней
-STATUS_JUVENILE_NO_TERR = 1 # 160-219 дней, без территории (умирает!)
-STATUS_JUVENILE_TERR = 2    # 160-219 дней, с территорией (резидент)
-STATUS_ADULT = 3           # 220+ дней (резидент)
+# ==================== CONSTANTS FOR NEW STATUS SYSTEM ====================
+STATUS_CHILD = 0           # 0-159 days
+STATUS_JUVENILE_NO_TERR = 1 # 160-219 days, without territory (dies!)
+STATUS_JUVENILE_TERR = 2    # 160-219 days, with territory (resident)
+STATUS_ADULT = 3           # 220+ days (resident)
 
 
 def generate_random_parameters():

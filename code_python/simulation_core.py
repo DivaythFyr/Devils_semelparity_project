@@ -544,10 +544,10 @@ def process_all_deaths(
     device: th.device = DEVICE
 ) -> None:
     """
-    Обработка смертей с реалистичной логикой болезни:
-    - Стадия 1 (латентная): до 2% в день, большинство выживает
-    - Стадия 2 (инфекционная): до 10% в день, значительная смертность
-    - Стадия 3 (терминальная): до 20% в день + 100% смертность в конце
+    Processing deaths with realistic disease logic:
+    - Stage 1 (latent): up to 2% per day, most survive
+    - Stage 2 (infectious): up to 10% per day, significant mortality
+    - Stage 3 (terminal): up to 20% per day + 100% mortality at the end
     """
     n: int = state.pop_size
     if n == 0:
@@ -565,8 +565,8 @@ def process_all_deaths(
     base_mortality_mask: Tensor = rand_mortality < base_mortality
     death_mask |= base_mortality_mask
     
-    # ==================== 3. СМЕРТНОСТЬ ОТ БОЛЕЗНИ ====================
-    # ----- Стадия 1 (латентная) - низкая смертность -----
+    # ==================== 3. DEATH FROM DISEASE ====================
+    # ----- Stage 1 (latent) - low mortality -----
     stage1_mask = state.infection_stage[:n] == INFECTION_STAGE_LATENT
     
     if stage1_mask.any():
@@ -574,7 +574,7 @@ def process_all_deaths(
         age_of_disease = state.age_of_disease[stage1_indices].float()
         stage1_duration = state.stage1_duration[stage1_indices]
         
-        # Формула: factor / (1 + exp(10 * (duration/2 + duration/3 - age) / duration))
+        # Formula: factor / (1 + exp(10 * (duration/2 + duration/3 - age) / duration))
         valid_mask = stage1_duration > 0
         if valid_mask.any():
             valid_indices = stage1_indices[valid_mask]
@@ -590,7 +590,7 @@ def process_all_deaths(
             if disease_death.numel() > 0:
                 death_mask[disease_death] = True
     
-    # ----- Стадия 2 (инфекционная) - средняя смертность -----
+    # ----- Stage 2 (infectious) - medium mortality -----
     stage2_mask = state.infection_stage[:n] == INFECTION_STAGE_INFECTIOUS
     
     if stage2_mask.any():
@@ -599,7 +599,7 @@ def process_all_deaths(
         stage1_duration = state.stage1_duration[stage2_indices]
         stage2_duration = state.stage2_duration[stage2_indices]
         
-        # Возраст в текущей стадии = общий возраст болезни - длительность стадии 1
+        # Age in current stage = total disease age - stage 1 duration
         age_in_stage2 = age_of_disease - stage1_duration
         
         valid_mask = stage2_duration > 0
@@ -608,7 +608,7 @@ def process_all_deaths(
             valid_age = age_in_stage2[valid_mask]
             valid_duration = stage2_duration[valid_mask]
             
-            # Отсекаем отрицательный возраст (если age_of_disease < stage1_duration)
+            # Cut off negative age (if age_of_disease < stage1_duration)
             positive_age_mask = valid_age >= 0
             if positive_age_mask.any():
                 final_indices = valid_indices[positive_age_mask]
@@ -624,7 +624,7 @@ def process_all_deaths(
                 if disease_death.numel() > 0:
                     death_mask[disease_death] = True
     
-    # ----- Стадия 3 (терминальная) - высокая смертность -----
+    # ----- Stage 3 (terminal) - high mortality -----
     stage3_mask = state.infection_stage[:n] == INFECTION_STAGE_TERMINAL
     
     if stage3_mask.any():
@@ -634,14 +634,14 @@ def process_all_deaths(
         stage2_duration = state.stage2_duration[stage3_indices]
         stage3_duration = state.stage3_duration[stage3_indices]
         
-        # 1. Ежедневная повышенная смертность (до 20%)
+        # 1. Daily increased mortality (up to 20%)
         valid_mask = stage3_duration > 0
         if valid_mask.any():
             valid_indices = stage3_indices[valid_mask]
             valid_age_of_disease = age_of_disease[valid_mask]
             valid_stage3_duration = stage3_duration[valid_mask]
             
-            # Возраст в стадии 3 = общий возраст - (стадия1 + стадия2)
+            # Age in stage 3 = total age - (stage1 + stage2)
             age_in_stage3 = valid_age_of_disease - (stage1_duration[valid_mask] + stage2_duration[valid_mask])
             
             positive_age_mask = age_in_stage3 >= 0
@@ -659,7 +659,7 @@ def process_all_deaths(
                 if disease_death.numel() > 0:
                     death_mask[disease_death] = True
         
-        # 2. 100% смертность в конце терминальной стадии
+        # 2. 100% mortality at the end of terminal stage
         total_duration = stage1_duration + stage2_duration + stage3_duration
         death_at_end = age_of_disease >= total_duration
         
