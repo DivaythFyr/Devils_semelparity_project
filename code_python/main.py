@@ -10,7 +10,7 @@ from visualisation import *
 import argparse
 
 # ---- TIME CONFIG ----
-TIMEPOINTS: int = 1500         
+TIMEPOINTS: int = 42000     
 # Total simulated days (iterations in main loop). Used in: main().
 
 
@@ -163,12 +163,12 @@ def main(
 
         # --- Visualization ---
         t0 = time.perf_counter()
-        if t in draw_times:
-            draw_snapshot(
-                state=simulation_state,
-                output_folder=folders["snapshots"],
-                run_num=run_num
-            )
+        # if t in draw_times:
+        #     draw_snapshot(
+        #         state=simulation_state,
+        #         output_folder=folders["snapshots"],
+        #         run_num=run_num
+        #     )
         timings["visualization"] += time.perf_counter() - t0
 
         # --- Progress reporting ---
@@ -186,12 +186,12 @@ def main(
     df.to_csv(csv_path, index=False)
     print(f"📊 Statistics saved: {csv_path}")
 
-    create_gif_from_snapshots(
-        snapshot_folder=folders["snapshots"],
-        output_folder=Path(base_output_folder),  # Use custom base folder
-        gif_name=gif_name,  # Use custom GIF filename
-        duration=0.5
-    )
+    # create_gif_from_snapshots(
+    #     snapshot_folder=folders["snapshots"],
+    #     output_folder=Path(base_output_folder),  # Use custom base folder
+    #     gif_name=gif_name,  # Use custom GIF filename
+    #     duration=0.5
+    # )
     
     # Print stoppage reason in a parseable format for run_multiple_experiments.py
     print(f"STOPPAGE_REASON:{simulation_state.stoppage_reason}")
@@ -210,7 +210,7 @@ if __name__ == "__main__":
     parser.add_argument('--INFECTIVITY1', type=float, default=INFECTIVITY1, help='Sexual transmission probability parameter.')
     parser.add_argument('--INFECTIVITY2', type=float, default=INFECTIVITY2, help='Nonsexual transmission probability parameter.')
     parser.add_argument('--output_folder', type=str, default="../output", help='Base output folder for results.')
-    parser.add_argument('--output_gif', type=str, default="simulation_run_000.gif", help='Filename for the output GIF.')
+    # parser.add_argument('--output_gif', type=str, default="simulation_run_000.gif", help='Filename for the output GIF.')
     parser.add_argument('--output_stats', type=str, default="simulation_stats.csv", help='Filename for the output CSV statistics.')
     
     args = parser.parse_args()
@@ -220,7 +220,7 @@ if __name__ == "__main__":
         infectivity1=args.INFECTIVITY1,
         infectivity2=args.INFECTIVITY2,
         base_output_folder=args.output_folder,
-        gif_name=args.output_gif,
+        # gif_name=args.output_gif,
         stats_name=args.output_stats
     )
     end: float = time.time()

@@ -4,7 +4,6 @@ from constants import *
 from torch import Tensor
 from physics import *
 from simulation_core import *
-import fastrand
 
 
 def calculate_chrom(

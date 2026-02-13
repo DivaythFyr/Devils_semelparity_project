@@ -23,7 +23,7 @@ MAX_AGE: int = 720
 INIT_POP_SIZE: int = 2000         
 # Default initial population size. Used in: initialize_population().
 
-MAX_POP_SIZE: int = 3000       
+MAX_POP_SIZE: int = 4000       
 # Safety cap for tensor preallocation. Used in: create_initial_state().
 
 INITIAL_FITNESS: float = 100.0  
@@ -119,11 +119,11 @@ STOPPAGE_ITEROPAROUS_PROPORTION_CONDITION: float = 0.999
 # Used in: main() (stoppage logic).
 
 # ---- INFECTION ----
-INFECTIVITY1: float = 0.5
+INFECTIVITY1: float = 0.01
 # Sexual transmission probability parameter (during breeding season, adults only, phase 1). 
 # Used in: infection_spread().
 
-INFECTIVITY2: float = 0.5
+INFECTIVITY2: float = 0.01
 # Nonsexual (contact) transmission probability parameter (all residents, all phases). 
 # Used in: infection_spread().
 
