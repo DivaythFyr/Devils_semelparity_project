@@ -183,6 +183,8 @@ def main(
     # --- POST-SIMULATION OUTPUT ---
     df: pd.DataFrame = pd.DataFrame([s.__dict__ for s in stats_list])
     csv_path = Path(base_output_folder) / stats_name  # Use custom stats filename
+    
+    df['result'] = simulation_state.stoppage_reason  # Add stoppage reason to the DataFrame
     df.to_csv(csv_path, index=False)
     print(f"📊 Statistics saved: {csv_path}")
 
