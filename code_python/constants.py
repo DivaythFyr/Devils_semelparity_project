@@ -23,7 +23,7 @@ MAX_AGE: int = 720
 INIT_POP_SIZE: int = 2000         
 # Default initial population size. Used in: initialize_population().
 
-MAX_POP_SIZE: int = 4000       
+MAX_POP_SIZE: int = 10000       
 # Safety cap for tensor preallocation. Used in: create_initial_state().
 
 INITIAL_FITNESS: float = 100.0  
