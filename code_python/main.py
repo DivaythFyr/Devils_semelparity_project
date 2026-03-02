@@ -141,6 +141,8 @@ def main(
             device=DEVICE
         )
         timings["death_processing"] += time.perf_counter() - t0
+        
+        print_devil_type_counts(simulation_state)
 
         # --- Stoppage logic ---
         t0 = time.perf_counter()

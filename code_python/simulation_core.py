@@ -705,11 +705,18 @@ def process_all_deaths(
         # Males: sex == True (1)
         is_male: Tensor = state.sex[:n] == True
         
-        # Mated this breeding season
+        # Semelparous male adults should die on this day regardless of mating status, to enforce the cost of semelparity
         is_adult = state.status[:n] == STATUS_ADULT
         
         semelparous_death_mask: Tensor = is_semelparous & is_male & is_adult
         death_mask |= semelparous_death_mask
+        
+        
+        ## previous state based on mated status, but we want to enforce death regardless of mating
+        # has_mated = state.mated_male[:n]
+        
+        # semelparous_death_mask: Tensor = is_semelparous & is_male & has_mated
+        # death_mask |= semelparous_death_mask
     
     # ==================== 6. APPLY ALL DEATHS ====================
     if death_mask.any():
@@ -720,17 +727,16 @@ def process_all_deaths(
     # Check for semelparous male adults alive after their death day until year end
     # Semelparous: both alleles are 1 (sum == 2)
     # if day_in_year > semelparous_death_day and day_in_year < DAYS_PER_YEAR:
-    # is_semelparous: Tensor = state.chrom_a[:n].sum(dim=1) == 2
-    
-    # # Males: sex == True (1)
-    # is_male: Tensor = state.sex[:n] == True
-    
-    # # Mated this breeding season
-    # is_adult = state.status[:n] == STATUS_ADULT
-    
-    # semelparous_males_alive: Tensor = is_semelparous & is_male & is_adult
-    # print('semelparous alive males: ', semelparous_males_alive.sum().item())
-
+    #     is_semelparous: Tensor = state.chrom_a[:n].sum(dim=1) == 2
+        
+    #     # Males: sex == True (1)
+    #     is_male: Tensor = state.sex[:n] == True
+        
+    #     # Mated this breeding season
+    #     is_adult = state.status[:n] == STATUS_ADULT
+        
+    #     semelparous_males_alive: Tensor = is_semelparous & is_male & is_adult
+    #     print('semelparous alive males: ', semelparous_males_alive.sum().item())
 
 
 def check_simulation_stop(
@@ -798,3 +804,26 @@ def check_simulation_stop(
 
     # --- Condition 5: Continue ---
     return False
+
+
+### Functions to print temporal statistics ###
+def print_devil_type_counts(state: SimulationState) -> None:
+    """
+    Print the counts of different types of devils: children, juveniles without territory,
+    juveniles with territory, adults, and males.
+    
+    Args:
+        state: SimulationState object.
+    """
+    n = state.pop_size
+    if n == 0:
+        print("No devils in the population.")
+        return
+    
+    children_count = (state.status[:n] == STATUS_CHILD).sum().item()
+    juv_no_terr_count = (state.status[:n] == STATUS_JUVENILE_NO_TERR).sum().item()
+    juv_terr_count = (state.status[:n] == STATUS_JUVENILE_TERR).sum().item()
+    adults_count = (state.status[:n] == STATUS_ADULT).sum().item()
+    males_count = (state.sex[:n] == True).sum().item()
+    
+    print(f"Children: {children_count}, Juveniles no terr: {juv_no_terr_count}, Juveniles terr: {juv_terr_count}, Adults: {adults_count}, Males: {males_count}")
