@@ -11,7 +11,7 @@ import argparse
 import sys
 
 # ---- TIME CONFIG ----
-TIMEPOINTS: int = 100   
+TIMEPOINTS: int = 42000
 # Total simulated days (iterations in main loop). Used in: main().
 
 

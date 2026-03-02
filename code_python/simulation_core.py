@@ -697,7 +697,7 @@ def process_all_deaths(
             prob_death_mask: Tensor = prob_death_candidates & (rand_terr < death_prob)
             death_mask |= prob_death_mask
     
-    # ==================== 5. DEATH BY REPRODUCTION SEMELPARITY ====================
+    # ==================== 5. DEATH BY  SEMELPARITY (no matter has there been reproduction or not) ====================
     if day_in_year == semelparous_death_day:
         # Semelparous: both alleles are 1 (sum == 2)
         is_semelparous: Tensor = state.chrom_a[:n].sum(dim=1) == 2
@@ -706,15 +706,30 @@ def process_all_deaths(
         is_male: Tensor = state.sex[:n] == True
         
         # Mated this breeding season
-        has_mated: Tensor = state.mated_male[:n] == True
+        is_adult = state.status[:n] == STATUS_ADULT
         
-        semelparous_death_mask: Tensor = is_semelparous & is_male & has_mated
+        semelparous_death_mask: Tensor = is_semelparous & is_male & is_adult
         death_mask |= semelparous_death_mask
     
     # ==================== 6. APPLY ALL DEATHS ====================
     if death_mask.any():
         indices_to_remove = th.nonzero(death_mask, as_tuple=True)[0]
         delete_animal(state, indices_to_remove, day_in_year=day_in_year)
+        
+        
+    # Check for semelparous male adults alive after their death day until year end
+    # Semelparous: both alleles are 1 (sum == 2)
+    # if day_in_year > semelparous_death_day and day_in_year < DAYS_PER_YEAR:
+    # is_semelparous: Tensor = state.chrom_a[:n].sum(dim=1) == 2
+    
+    # # Males: sex == True (1)
+    # is_male: Tensor = state.sex[:n] == True
+    
+    # # Mated this breeding season
+    # is_adult = state.status[:n] == STATUS_ADULT
+    
+    # semelparous_males_alive: Tensor = is_semelparous & is_male & is_adult
+    # print('semelparous alive males: ', semelparous_males_alive.sum().item())
 
 
 
