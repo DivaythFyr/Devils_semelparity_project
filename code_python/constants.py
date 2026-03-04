@@ -23,7 +23,7 @@ MAX_AGE: int = 720
 INIT_POP_SIZE: int = 2000         
 # Default initial population size. Used in: initialize_population().
 
-MAX_POP_SIZE: int = 10000       
+MAX_POP_SIZE: int = 3000       
 # Safety cap for tensor preallocation. Used in: create_initial_state().
 
 INITIAL_FITNESS: float = 100.0  
@@ -44,10 +44,12 @@ MAP_Y_SIZE: float = 4000.0
 # Used in: initialize_population(), move() (wall repulsion, boundary correction), 
 # draw_snapshot() (plot limits).
 
-MAX_SPEED: float = 20.0           
+MAX_SPEED: float = 15.0     
+# Changings from 20.0 (before)      
 # Maximum absolute speed per axis. Used in: move() (speed clamping).
 
-MAX_RADIUS: float = 1000.0        
+MAX_RADIUS: float = 1200.0   
+# Changings from 1000 (before)     
 # Maximum individual influence radius for repulsion and infection. 
 # Used in: move() (pairwise repulsion), infection_spread() (distance filtering).
 
@@ -119,11 +121,11 @@ STOPPAGE_ITEROPAROUS_PROPORTION_CONDITION: float = 0.999
 # Used in: main() (stoppage logic).
 
 # ---- INFECTION ----
-INFECTIVITY1: float = 0.05
+INFECTIVITY1: float = 0.0
 # Sexual transmission probability parameter (during breeding season, adults only, phase 1). 
 # Used in: infection_spread().
 
-INFECTIVITY2: float = 0.05
+INFECTIVITY2: float = 0.0
 # Nonsexual (contact) transmission probability parameter (all residents, all phases). 
 # Used in: infection_spread().
 
@@ -131,27 +133,21 @@ INFECTIVITY2: float = 0.05
 
 INFECTION_STAGE_HEALTHY: int = 0        # Healthy
 INFECTION_STAGE_LATENT: int = 1         # Latent (0.5-1.0 years, no transmission)
-INFECTION_STAGE_INFECTIOUS: int = 2     # Infectious (0.25-1.0 years, transmission)
 INFECTION_STAGE_TERMINAL: int = 3       # Terminal (0.5-1.0 years, 100% mortality)
 
 # ---- STAGE DURATIONS (in days) ----
-STAGE1_DURATION_MIN: int = 60    # 0.5 years = 60 days
-STAGE1_DURATION_MAX: int = 120    # 1.0 years = 120 days
-STAGE2_DURATION_MIN: int = 30     # 0.25 years = 30 days  
-STAGE2_DURATION_MAX: int = 120    # 1.0 years = 120 days
-STAGE3_DURATION_MIN: int = 60    # 0.5 years = 60 days
-STAGE3_DURATION_MAX: int = 120    # 1.0 years = 120 days
+STAGE1_DURATION_MIN: int = 90    # 0.5 years = 60 days
+STAGE1_DURATION_MAX: int = 180    # 1.0 years = 120 days
+STAGE3_DURATION_MIN: int = 90    # 0.75 years = 90 days
+STAGE3_DURATION_MAX: int = 180    # 1.5 years = 180 days
 
 # ---- STAGE-SPECIFIC TRANSMISSION MULTIPLIERS ----
 STAGE1_TRANSMISSION_MULTIPLIER: float = 0.1    # Latent stage (very low)
-STAGE2_TRANSMISSION_MULTIPLIER: float = 5.0    # Infectious stage  
 STAGE3_TRANSMISSION_MULTIPLIER: float = 10.0   # Terminal stage
 
 # ---- TRANSMISSION CONSTRAINTS ----
 STAGE1_CAN_TRANSMIT_SEXUAL: bool = False       # Latent does NOT transmit sexually
 STAGE1_CAN_TRANSMIT_CONTACT: bool = True       # Latent transmits by contact (with very low probability)
-STAGE2_CAN_TRANSMIT_SEXUAL: bool = True        # Infectious transmits by all means
-STAGE2_CAN_TRANSMIT_CONTACT: bool = True
 STAGE3_CAN_TRANSMIT_SEXUAL: bool = True        # Terminal transmits by all means
 STAGE3_CAN_TRANSMIT_CONTACT: bool = True
 
@@ -160,7 +156,6 @@ DISEASE_MORTALITY_FACTOR: float = 0.1     # Maximum 10% in sigmoid formula
 
 # ---- DISEASE MORTALITY ----
 DISEASE_MORTALITY_FACTOR_STAGE1: float = 0.02    # 2% maximum for latent
-DISEASE_MORTALITY_FACTOR_STAGE2: float = 0.10    # 10% maximum for infectious
 DISEASE_MORTALITY_FACTOR_STAGE3: float = 0.20    # 20% maximum for terminal + 100% at the end
 
 

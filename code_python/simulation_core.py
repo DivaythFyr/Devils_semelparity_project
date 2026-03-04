@@ -439,6 +439,8 @@ def transition_child_to_juvenile_no_terr(
     state.speed_x[indices] = 0.0
     state.speed_y[indices] = 0.0
     
+    print('transition from child to non-terr juvenile, num transitioned:', indices.shape[0])
+    
     
 def transition_juvenile_no_terr_to_terr(
     state: SimulationState,
@@ -499,6 +501,8 @@ def transition_juvenile_no_terr_to_terr(
     state.territory_center_x[successful_indices] = state.x[successful_indices].clone()
     state.territory_center_y[successful_indices] = state.y[successful_indices].clone()
     
+    print('transition from non-terr juvenile to terr juvenile, num transitioned:', successful_indices.shape[0])
+    
         
 def transition_juvenile_terr_to_adult(
     state: SimulationState,
@@ -522,6 +526,8 @@ def transition_juvenile_terr_to_adult(
         return
 
     state.status[indices] = STATUS_ADULT
+    
+    print('transition from terr juvenile to adult, num transitioned:', indices.shape[0])
         
     
 

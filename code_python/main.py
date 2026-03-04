@@ -141,7 +141,7 @@ def main(
         )
         timings["death_processing"] += time.perf_counter() - t0
         
-        print_state(simulation_state)
+        #print_state(simulation_state)
 
         # --- Stoppage logic ---
         t0 = time.perf_counter()

@@ -13,7 +13,6 @@ def calculate_transmission_probability(
     infectivity1: float = INFECTIVITY1,
     infectivity2: float = INFECTIVITY2,
     stage1_multiplier: float = STAGE1_TRANSMISSION_MULTIPLIER,
-    stage2_multiplier: float = STAGE2_TRANSMISSION_MULTIPLIER,
     stage3_multiplier: float = STAGE3_TRANSMISSION_MULTIPLIER,
     breeding_days: int = BREEDING_DAYS,
     device: th.device = DEVICE
@@ -36,11 +35,9 @@ def calculate_transmission_probability(
     
     stage_multipliers = th.zeros(num_transmitters, device=device)
     stage1_mask = transmitter_stages == INFECTION_STAGE_LATENT
-    stage2_mask = transmitter_stages == INFECTION_STAGE_INFECTIOUS
     stage3_mask = transmitter_stages == INFECTION_STAGE_TERMINAL
     
     stage_multipliers[stage1_mask] = stage1_multiplier
-    stage_multipliers[stage2_mask] = stage2_multiplier
     stage_multipliers[stage3_mask] = stage3_multiplier
     
     stage_multiplier_matrix = stage_multipliers.unsqueeze(0).expand(num_susceptibles, -1)
@@ -55,12 +52,6 @@ def calculate_transmission_probability(
         transmitter_sexual_allowed_mask[stage1_mask] = True
     if STAGE1_CAN_TRANSMIT_CONTACT:
         transmitter_contact_allowed_mask[stage1_mask] = True
-    
-    # Stage 2
-    if STAGE2_CAN_TRANSMIT_SEXUAL:
-        transmitter_sexual_allowed_mask[stage2_mask] = True
-    if STAGE2_CAN_TRANSMIT_CONTACT:
-        transmitter_contact_allowed_mask[stage2_mask] = True
     
     # Stage 3
     if STAGE3_CAN_TRANSMIT_SEXUAL:
