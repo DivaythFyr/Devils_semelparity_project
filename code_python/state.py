@@ -41,12 +41,12 @@ class SimulationState:
     
     # ---- INFECTION STATE [pop_size] ----
     # ---- INFECTION STATE ----
-    infection_stage: Tensor  # 0=healthy, 1=latent, 2=infectious, 3=terminal
+    infection_stage: Tensor  # 0=healthy, 1=latent, 2=TERMINAL 
     age_of_disease: Tensor  # Days since disease onset
+
     
     # Individual stage durations
     stage1_duration: Tensor  # Duration of latent stage (180-360 days)
-    stage2_duration: Tensor  # Duration of infectious stage (90-360 days)
     stage3_duration: Tensor  # Duration of terminal stage (180-360 days)
     
     
@@ -135,7 +135,6 @@ def create_initial_state(
         
         # NEW FIELDS FOR STAGE DURATIONS
         stage1_duration=th.zeros(max_pop_size, dtype=th.float32, device=device),
-        stage2_duration=th.zeros(max_pop_size, dtype=th.float32, device=device),
         stage3_duration=th.zeros(max_pop_size, dtype=th.float32, device=device),
         
         # Reproduction
@@ -196,7 +195,23 @@ class SimulationStats:
     infectivity1: float
     infectivity2: float
     run_id: int
-    
+    # New fields for detailed counts by type, genotype, and gender
+    children_semel_females: int
+    children_semel_males: int
+    children_iterop_females: int
+    children_iterop_males: int
+    juv_no_terr_semel_females: int
+    juv_no_terr_semel_males: int
+    juv_no_terr_iterop_females: int
+    juv_no_terr_iterop_males: int
+    juv_terr_semel_females: int
+    juv_terr_semel_males: int
+    juv_terr_iterop_females: int
+    juv_terr_iterop_males: int
+    adults_semel_females: int
+    adults_semel_males: int
+    adults_iterop_females: int
+    adults_iterop_males: int
     
 
 def collect_statistics(
@@ -228,7 +243,23 @@ def collect_statistics(
             females_over_2_years=0,
             infectivity1=INFECTIVITY1,
             infectivity2=INFECTIVITY2,
-            run_id=run_num
+            run_id=run_num,
+            children_semel_females=0,
+            children_semel_males=0,
+            children_iterop_females=0,
+            children_iterop_males=0,
+            juv_no_terr_semel_females=0,
+            juv_no_terr_semel_males=0,
+            juv_no_terr_iterop_females=0,
+            juv_no_terr_iterop_males=0,
+            juv_terr_semel_females=0,
+            juv_terr_semel_males=0,
+            juv_terr_iterop_females=0,
+            juv_terr_iterop_males=0,
+            adults_semel_females=0,
+            adults_semel_males=0,
+            adults_iterop_females=0,
+            adults_iterop_males=0
         )
 
     infected: int = int((state.infection_stage[:n] > 0).sum().item())
@@ -247,6 +278,41 @@ def collect_statistics(
     males_over_2_years: int = int(((state.sex[:n] == 1) & (state.age[:n] >= 240)).sum().item())
     females_over_2_years: int = int(((state.sex[:n] == 0) & (state.age[:n] >= 240)).sum().item())
     infection_rate: float = (infected / n * 100) if n > 0 else 0.0
+
+    # Masks for types
+    children_mask = state.status[:n] == STATUS_CHILD
+    juv_no_terr_mask = state.status[:n] == STATUS_JUVENILE_NO_TERR
+    juv_terr_mask = state.status[:n] == STATUS_JUVENILE_TERR
+    adults_mask = state.status[:n] == STATUS_ADULT
+    
+    # Masks for gender
+    females_mask = state.sex[:n] == False
+    males_mask = state.sex[:n] == True
+    
+    # Masks for genotype
+    semel_mask = state.chrom_a[:n].sum(dim=1) == 2
+    iterop_mask = state.chrom_a[:n].sum(dim=1) == 0
+    
+    # Compute detailed counts
+    children_semel_females = int((children_mask & semel_mask & females_mask).sum().item())
+    children_semel_males = int((children_mask & semel_mask & males_mask).sum().item())
+    children_iterop_females = int((children_mask & iterop_mask & females_mask).sum().item())
+    children_iterop_males = int((children_mask & iterop_mask & males_mask).sum().item())
+    
+    juv_no_terr_semel_females = int((juv_no_terr_mask & semel_mask & females_mask).sum().item())
+    juv_no_terr_semel_males = int((juv_no_terr_mask & semel_mask & males_mask).sum().item())
+    juv_no_terr_iterop_females = int((juv_no_terr_mask & iterop_mask & females_mask).sum().item())
+    juv_no_terr_iterop_males = int((juv_no_terr_mask & iterop_mask & males_mask).sum().item())
+    
+    juv_terr_semel_females = int((juv_terr_mask & semel_mask & females_mask).sum().item())
+    juv_terr_semel_males = int((juv_terr_mask & semel_mask & males_mask).sum().item())
+    juv_terr_iterop_females = int((juv_terr_mask & iterop_mask & females_mask).sum().item())
+    juv_terr_iterop_males = int((juv_terr_mask & iterop_mask & males_mask).sum().item())
+    
+    adults_semel_females = int((adults_mask & semel_mask & females_mask).sum().item())
+    adults_semel_males = int((adults_mask & semel_mask & males_mask).sum().item())
+    adults_iterop_females = int((adults_mask & iterop_mask & females_mask).sum().item())
+    adults_iterop_males = int((adults_mask & iterop_mask & males_mask).sum().item())
 
     return SimulationStats(
         time=state.current_time,
@@ -267,12 +333,21 @@ def collect_statistics(
         females_over_2_years=females_over_2_years,
         infectivity1=INFECTIVITY1,
         infectivity2=INFECTIVITY2,
-        run_id=run_num
+        run_id=run_num,
+        children_semel_females=children_semel_females,
+        children_semel_males=children_semel_males,
+        children_iterop_females=children_iterop_females,
+        children_iterop_males=children_iterop_males,
+        juv_no_terr_semel_females=juv_no_terr_semel_females,
+        juv_no_terr_semel_males=juv_no_terr_semel_males,
+        juv_no_terr_iterop_females=juv_no_terr_iterop_females,
+        juv_no_terr_iterop_males=juv_no_terr_iterop_males,
+        juv_terr_semel_females=juv_terr_semel_females,
+        juv_terr_semel_males=juv_terr_semel_males,
+        juv_terr_iterop_females=juv_terr_iterop_females,
+        juv_terr_iterop_males=juv_terr_iterop_males,
+        adults_semel_females=adults_semel_females,
+        adults_semel_males=adults_semel_males,
+        adults_iterop_females=adults_iterop_females,
+        adults_iterop_males=adults_iterop_males
     )
-    
-    
-    
-
-
-
-    

@@ -139,7 +139,7 @@ def add_animal(
         chrom_a: Reproductive alleles [num_new, 2]
         fitness: Fitness values [num_new]
         status: Status codes [num_new]
-        infection_stage: Infection stage [num_new] (0=healthy, 1=latent, 2=infectious, 3=terminal)
+        infection_stage: Infection stage [num_new] (0=healthy, 1=latent, 3=terminal)
         age_of_disease: Age of disease [num_new]
         mated_male: Mated flag [num_new]
         device: Torch device (default: DEVICE)
@@ -160,13 +160,12 @@ def add_animal(
     state.chrom_a[start:end] = chrom_a[:actual_new]
     state.fitness[start:end] = fitness[:actual_new]
     state.status[start:end] = status[:actual_new]
-    state.infection_stage[start:end] = infection_stage[:actual_new]  # CHANGED
+    state.infection_stage[start:end] = infection_stage[:actual_new]
     state.age_of_disease[start:end] = age_of_disease[:actual_new]
     state.mated_male[start:end] = mated_male[:actual_new]
     
     # NEW FIELDS: initialize with zeros (will be set upon infection)
     state.stage1_duration[start:end] = 0.0
-    state.stage2_duration[start:end] = 0.0
     state.stage3_duration[start:end] = 0.0
 
     # Territory centers: set to initial position
@@ -183,11 +182,9 @@ def add_animal(
 
     # Update population size
     state.pop_size += actual_new
+
     
- 
-
 # In simulation_core.py, modifying delete_animal:
-
 def delete_animal(
     state: SimulationState,
     indices_to_remove: Tensor,
@@ -245,11 +242,10 @@ def delete_animal(
         state.fitness[indices_to_remove] = 0.0
         state.chrom_sex[indices_to_remove] = 0
         state.chrom_a[indices_to_remove] = 0
-        state.infection_stage[indices_to_remove] = 0  # CHANGED
+        state.infection_stage[indices_to_remove] = 0
         state.age_of_disease[indices_to_remove] = 0
-        state.stage1_duration[indices_to_remove] = 0.0  # CHANGED: phase1 → stage1
-        state.stage2_duration[indices_to_remove] = 0.0  # CHANGED: phase2 → stage2
-        state.stage3_duration[indices_to_remove] = 0.0  # NEW
+        state.stage1_duration[indices_to_remove] = 0.0
+        state.stage3_duration[indices_to_remove] = 0.0
         state.mated_male[indices_to_remove] = False
         state.mated_female[indices_to_remove] = False
     # ==================== END MEMORY CLEANUP ====================
@@ -270,11 +266,10 @@ def delete_animal(
     state.chrom_a[:new_n] = state.chrom_a[keep_indices]
     state.fitness[:new_n] = state.fitness[keep_indices]
     state.status[:new_n] = state.status[keep_indices]
-    state.infection_stage[:new_n] = state.infection_stage[keep_indices]  # CHANGED
+    state.infection_stage[:new_n] = state.infection_stage[keep_indices]
     state.age_of_disease[:new_n] = state.age_of_disease[keep_indices]
-    state.stage1_duration[:new_n] = state.stage1_duration[keep_indices]  # CHANGED
-    state.stage2_duration[:new_n] = state.stage2_duration[keep_indices]  # CHANGED
-    state.stage3_duration[:new_n] = state.stage3_duration[keep_indices]  # NEW
+    state.stage1_duration[:new_n] = state.stage1_duration[keep_indices]
+    state.stage3_duration[:new_n] = state.stage3_duration[keep_indices]
     state.mated_male[:new_n] = state.mated_male[keep_indices]
     state.mated_female[:new_n] = state.mated_female[keep_indices]
     state.territory_center_x[:new_n] = state.territory_center_x[keep_indices]
@@ -285,7 +280,6 @@ def delete_animal(
 
     state.pop_size = new_n
     # ==================== END REMOVE ANIMALS ====================
-
 
     
 def disperse_offspring(
@@ -536,7 +530,6 @@ def process_all_deaths(
     day_in_year: int,
     base_mortality: float = MORTALITY,
     disease_mortality_factor_stage1: float = DISEASE_MORTALITY_FACTOR_STAGE1,
-    disease_mortality_factor_stage2: float = DISEASE_MORTALITY_FACTOR_STAGE2,
     disease_mortality_factor_stage3: float = DISEASE_MORTALITY_FACTOR_STAGE3,
     dispersal_deadline: int = DISPERSAL_DEADLINE,
     maturity_age: int = AGE_JUVENILE_TO_ADULT,
@@ -546,8 +539,9 @@ def process_all_deaths(
     """
     Processing deaths with realistic disease logic:
     - Stage 1 (latent): up to 2% per day, most survive
-    - Stage 2 (infectious): up to 10% per day, significant mortality
     - Stage 3 (terminal): up to 20% per day + 100% mortality at the end
+    
+    Semelparous males die on semelparous_death_day regardless of mating status.
     """
     n: int = state.pop_size
     if n == 0:
@@ -590,40 +584,6 @@ def process_all_deaths(
             if disease_death.numel() > 0:
                 death_mask[disease_death] = True
     
-    # ----- Stage 2 (infectious) - medium mortality -----
-    stage2_mask = state.infection_stage[:n] == INFECTION_STAGE_INFECTIOUS
-    
-    if stage2_mask.any():
-        stage2_indices = th.nonzero(stage2_mask, as_tuple=True)[0]
-        age_of_disease = state.age_of_disease[stage2_indices].float()
-        stage1_duration = state.stage1_duration[stage2_indices]
-        stage2_duration = state.stage2_duration[stage2_indices]
-        
-        # Age in current stage = total disease age - stage 1 duration
-        age_in_stage2 = age_of_disease - stage1_duration
-        
-        valid_mask = stage2_duration > 0
-        if valid_mask.any():
-            valid_indices = stage2_indices[valid_mask]
-            valid_age = age_in_stage2[valid_mask]
-            valid_duration = stage2_duration[valid_mask]
-            
-            # Cut off negative age (if age_of_disease < stage1_duration)
-            positive_age_mask = valid_age >= 0
-            if positive_age_mask.any():
-                final_indices = valid_indices[positive_age_mask]
-                final_age = valid_age[positive_age_mask]
-                final_duration = valid_duration[positive_age_mask]
-                
-                sigmoid_arg = 10.0 * ((final_duration/2.0) + (final_duration/3.0) - final_age) / final_duration
-                disease_death_rate = disease_mortality_factor_stage2 / (1.0 + th.exp(sigmoid_arg))
-                
-                rand_disease = th.rand(final_indices.shape[0], device=device)
-                disease_death = final_indices[rand_disease < disease_death_rate]
-                
-                if disease_death.numel() > 0:
-                    death_mask[disease_death] = True
-    
     # ----- Stage 3 (terminal) - high mortality -----
     stage3_mask = state.infection_stage[:n] == INFECTION_STAGE_TERMINAL
     
@@ -631,7 +591,6 @@ def process_all_deaths(
         stage3_indices = th.nonzero(stage3_mask, as_tuple=True)[0]
         age_of_disease = state.age_of_disease[stage3_indices].float()
         stage1_duration = state.stage1_duration[stage3_indices]
-        stage2_duration = state.stage2_duration[stage3_indices]
         stage3_duration = state.stage3_duration[stage3_indices]
         
         # 1. Daily increased mortality (up to 20%)
@@ -641,8 +600,8 @@ def process_all_deaths(
             valid_age_of_disease = age_of_disease[valid_mask]
             valid_stage3_duration = stage3_duration[valid_mask]
             
-            # Age in stage 3 = total age - (stage1 + stage2)
-            age_in_stage3 = valid_age_of_disease - (stage1_duration[valid_mask] + stage2_duration[valid_mask])
+            # Age in stage 3 = total age - stage 1 duration
+            age_in_stage3 = valid_age_of_disease - stage1_duration[valid_mask]
             
             positive_age_mask = age_in_stage3 >= 0
             if positive_age_mask.any():
@@ -660,7 +619,7 @@ def process_all_deaths(
                     death_mask[disease_death] = True
         
         # 2. 100% mortality at the end of terminal stage
-        total_duration = stage1_duration + stage2_duration + stage3_duration
+        total_duration = stage1_duration + stage3_duration  
         death_at_end = age_of_disease >= total_duration
         
         if death_at_end.any():
@@ -697,7 +656,7 @@ def process_all_deaths(
             prob_death_mask: Tensor = prob_death_candidates & (rand_terr < death_prob)
             death_mask |= prob_death_mask
     
-    # ==================== 5. DEATH BY  SEMELPARITY (no matter has there been reproduction or not) ====================
+    # ==================== 5. DEATH BY SEMELPARITY (all semelparous males die after breeding season regardless of mating) ====================
     if day_in_year == semelparous_death_day:
         # Semelparous: both alleles are 1 (sum == 2)
         is_semelparous: Tensor = state.chrom_a[:n].sum(dim=1) == 2
@@ -705,38 +664,18 @@ def process_all_deaths(
         # Males: sex == True (1)
         is_male: Tensor = state.sex[:n] == True
         
-        # Semelparous male adults should die on this day regardless of mating status, to enforce the cost of semelparity
-        is_adult = state.status[:n] == STATUS_ADULT
+        # Adults only (juveniles don't die from semelparity)
+        is_adult: Tensor = state.status[:n] == STATUS_ADULT
         
+        # ALL semelparous adult males die, regardless of mating status
         semelparous_death_mask: Tensor = is_semelparous & is_male & is_adult
         death_mask |= semelparous_death_mask
-        
-        
-        ## previous state based on mated status, but we want to enforce death regardless of mating
-        # has_mated = state.mated_male[:n]
-        
-        # semelparous_death_mask: Tensor = is_semelparous & is_male & has_mated
-        # death_mask |= semelparous_death_mask
     
     # ==================== 6. APPLY ALL DEATHS ====================
     if death_mask.any():
         indices_to_remove = th.nonzero(death_mask, as_tuple=True)[0]
         delete_animal(state, indices_to_remove, day_in_year=day_in_year)
-        
-        
-    # Check for semelparous male adults alive after their death day until year end
-    # Semelparous: both alleles are 1 (sum == 2)
-    # if day_in_year > semelparous_death_day and day_in_year < DAYS_PER_YEAR:
-    #     is_semelparous: Tensor = state.chrom_a[:n].sum(dim=1) == 2
-        
-    #     # Males: sex == True (1)
-    #     is_male: Tensor = state.sex[:n] == True
-        
-    #     # Mated this breeding season
-    #     is_adult = state.status[:n] == STATUS_ADULT
-        
-    #     semelparous_males_alive: Tensor = is_semelparous & is_male & is_adult
-    #     print('semelparous alive males: ', semelparous_males_alive.sum().item())
+
 
 
 def check_simulation_stop(
@@ -824,6 +763,48 @@ def print_devil_type_counts(state: SimulationState) -> None:
     juv_no_terr_count = (state.status[:n] == STATUS_JUVENILE_NO_TERR).sum().item()
     juv_terr_count = (state.status[:n] == STATUS_JUVENILE_TERR).sum().item()
     adults_count = (state.status[:n] == STATUS_ADULT).sum().item()
-    males_count = (state.sex[:n] == True).sum().item()
+    #males_count = (state.sex[:n] == True).sum().item()
     
-    print(f"Children: {children_count}, Juveniles no terr: {juv_no_terr_count}, Juveniles terr: {juv_terr_count}, Adults: {adults_count}, Males: {males_count}")
+    print(f"Children: {children_count}, Juveniles no terr: {juv_no_terr_count}, Juveniles terr: {juv_terr_count}, Adults: {adults_count}")
+
+
+def print_state(state: SimulationState) -> None:
+    """
+    Print counts of semelparous and iteroparous for each type and gender.
+    
+    Args:
+        state: SimulationState object.
+    """
+    n = state.pop_size
+    if n == 0:
+        print("No devils in the population.")
+        return
+    
+    # Masks for types
+    children = state.status[:n] == STATUS_CHILD
+    juv_no_terr = state.status[:n] == STATUS_JUVENILE_NO_TERR
+    juv_terr = state.status[:n] == STATUS_JUVENILE_TERR
+    adults = state.status[:n] == STATUS_ADULT
+    
+    # Masks for gender
+    females = state.sex[:n] == False
+    males = state.sex[:n] == True
+    
+    # Masks for genotype
+    semel = state.chrom_a[:n].sum(dim=1) == 2
+    iterop = state.chrom_a[:n].sum(dim=1) == 0
+    
+    types = [
+        ("Children", children),
+        ("Juv no terr", juv_no_terr),
+        ("Juv terr", juv_terr),
+        ("Adults", adults)
+    ]
+    
+    for type_name, type_mask in types:
+        for geno_name, geno_mask in [("Semel", semel), ("Iterop", iterop)]:
+            for sex_name, sex_mask in [("Females", females), ("Males", males)]:
+                count = (type_mask & geno_mask & sex_mask).sum().item()
+                print(f"{type_name} {geno_name} {sex_name}: {count}")
+    
+

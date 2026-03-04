@@ -11,29 +11,13 @@ def move(
     distance_sq: Tensor
 ) -> None:
     """
-    Updates the positions and velocities of all individuals in the simulation for one time step.
-
-    Implements the following mechanics, step by step:
-
-    1. **Repulsion from All Individuals:**  
-       Calculates pairwise repulsion forces between ALL individuals within a specified radius.
-
-    2. **Wall Repulsion:**  
-       Applies repulsion forces to individuals near the map boundaries (walls).
-
-    3. **Territory Attraction (Residents Only):**  
-       Applies an attraction force to residents only, pulling them toward the center of their territory.
-
-    4. **Movement:**  
-       Updates positions of all individuals based on their velocities (with speed clamping).
-
-    5. **Border Correction:**  
-       Reflects individuals off the map boundaries and clamps positions within the map.
-
-    6. **Territory Boundary Enforcement (Residents Only):**  
-       Ensures that residents remain within the radius of their assigned territory.
-
-    Modifies the state in-place. Does not return a value.
+    Updates the positions and velocities of all individuals.
+    
+    Key changes from original:
+    - Only individuals WITHOUT territory can move (STATUS_CHILD and STATUS_JUVENILE_NO_TERR)
+    - Individuals WITH territory are completely immobile (STATUS_ADULT and STATUS_JUVENILE_TERR)
+    - Territory holders still create repulsion forces (others can bounce off them)
+    - No attraction to territory center since territory holders don't move
     
     Args:
         state: SimulationState object to modify
@@ -45,65 +29,71 @@ def move(
     if n == 0:
         return
 
-    resident_mask = (state.status[:n] == STATUS_ADULT) | (state.status[:n] == STATUS_JUVENILE_TERR)
+    # ==================== IDENTIFY MOBILE INDIVIDUALS ====================
+    # Mobile: only individuals WITHOUT territory (children and juveniles without territory)
+    mobile_mask = (state.status[:n] == STATUS_CHILD) | \
+                  (state.status[:n] == STATUS_JUVENILE_NO_TERR)
+    
+    if not mobile_mask.any():
+        return  # No one to move
+    
+    mobile_indices = th.nonzero(mobile_mask, as_tuple=True)[0]
+    # ==================== END IDENTIFY MOBILE INDIVIDUALS ====================
 
     # ==================== STEP 1: REPULSION FROM ALL INDIVIDUALS ====================
-    # Uses pre-calculated distance matrices (no recalculation needed)
+    # Calculate forces from ALL individuals (including immobile territory holders)
     mask = distance_sq < MAX_RADIUS_SQ
     distance_cube = distance_sq ** 1.5 + distance_sq.eq(0)
     new_speed_x = (distance_x * mask / distance_cube).sum(1) * REPULSION
     new_speed_y = (distance_y * mask / distance_cube).sum(1) * REPULSION
 
-    state.speed_x[:n] += new_speed_x
-    state.speed_y[:n] += new_speed_y
+    # Apply forces ONLY to mobile individuals
+    state.speed_x[mobile_indices] += new_speed_x[mobile_indices]
+    state.speed_y[mobile_indices] += new_speed_y[mobile_indices]
+    # ==================== END STEP 1 ====================
 
     # ==================== STEP 2: REPULSION FROM WALLS ====================
-    # OPTIMIZED: Reduced from 4 intermediate tensors to 2 local references
-    x = state.x[:n]
-    y = state.y[:n]
-    state.speed_x[:n] += REPULSION / (x ** 2 + 1) - REPULSION / ((MAP_X_SIZE - x) ** 2 + 1)
-    state.speed_y[:n] += REPULSION / (y ** 2 + 1) - REPULSION / ((MAP_Y_SIZE - y) ** 2 + 1)
+    # Wall repulsion only for mobile individuals
+    x_mobile = state.x[mobile_indices]
+    y_mobile = state.y[mobile_indices]
+    
+    state.speed_x[mobile_indices] += REPULSION / (x_mobile ** 2 + 1) - \
+                                     REPULSION / ((MAP_X_SIZE - x_mobile) ** 2 + 1)
+    state.speed_y[mobile_indices] += REPULSION / (y_mobile ** 2 + 1) - \
+                                     REPULSION / ((MAP_Y_SIZE - y_mobile) ** 2 + 1)
+    # ==================== END STEP 2 ====================
 
     # ==================== STEP 3: ATTRACTION TO TERRITORY CENTER ====================
-    has_territory = resident_mask & (state.territory_center_x[:n] >= 0)
-    
-    if has_territory.any():
-        terr_indices = th.nonzero(has_territory, as_tuple=True)[0]
-        
-        dist_to_center_x = state.territory_center_x[terr_indices] - state.x[terr_indices]
-        dist_to_center_y = state.territory_center_y[terr_indices] - state.y[terr_indices]
-        dist_to_center_sq = dist_to_center_x ** 2 + dist_to_center_y ** 2
-        
-        outside_range = dist_to_center_sq > RANGE_SQ
-        
-        if outside_range.any():
-            outside_indices = terr_indices[outside_range]
-            # OPTIMIZED: Reuse already-calculated distances instead of recalculating
-            dist_x_outside = dist_to_center_x[outside_range]
-            dist_y_outside = dist_to_center_y[outside_range]
-            dist_outside = th.sqrt(dist_to_center_sq[outside_range]) + 1e-6
-            
-            attraction_strength = REPULSION * 0.1
-            state.speed_x[outside_indices] += attraction_strength * dist_x_outside / dist_outside
-            state.speed_y[outside_indices] += attraction_strength * dist_y_outside / dist_outside
+    # COMPLETELY REMOVED - territory holders don't move, so no attraction needed
+    # Mobile individuals (no territory) don't have a territory center to be attracted to
+    # ==================== END STEP 3 ====================
 
-    # ==================== STEP 4: CLAMP SPEED AND UPDATE POSITION (IMPLEMENT MOVEMENT) ====================
-    speed_magnitude = th.sqrt(state.speed_x[:n] ** 2 + state.speed_y[:n] ** 2)
+    # ==================== STEP 4: CLAMP SPEED AND UPDATE POSITION ====================
+    # Clamp speed for mobile individuals
+    speed_magnitude = th.sqrt(state.speed_x[mobile_indices] ** 2 + state.speed_y[mobile_indices] ** 2)
     speed_scale = th.clamp(MAX_SPEED / (speed_magnitude + 1e-6), max=1.0)
-    state.speed_x[:n] *= speed_scale
-    state.speed_y[:n] *= speed_scale
+    state.speed_x[mobile_indices] *= speed_scale
+    state.speed_y[mobile_indices] *= speed_scale
 
-    state.x[:n] += state.speed_x[:n]
-    state.y[:n] += state.speed_y[:n]
+    # Update positions ONLY for mobile individuals
+    state.x[mobile_indices] += state.speed_x[mobile_indices]
+    state.y[mobile_indices] += state.speed_y[mobile_indices]
+    # ==================== END STEP 4 ====================
 
     # ==================== STEP 5: ENFORCE MAP BOUNDARIES ====================
-    # OPTIMIZED: Use in-place clamp to avoid tensor allocation
-    state.x[:n].clamp_(0, MAP_X_SIZE)
-    state.y[:n].clamp_(0, MAP_Y_SIZE)
+    # Boundaries only for mobile individuals
+    state.x[mobile_indices].clamp_(0, MAP_X_SIZE)
+    state.y[mobile_indices].clamp_(0, MAP_Y_SIZE)
+    # ==================== END STEP 5 ====================
 
     # ==================== STEP 6: RESET SPEED FOR NEXT STEP ====================
-    state.speed_x[:n] = 0.0
-    state.speed_y[:n] = 0.0
+    # Reset speed only for mobile individuals
+    state.speed_x[mobile_indices] = 0.0
+    state.speed_y[mobile_indices] = 0.0
+    
+    # Territory holders (immobile) already have speed = 0.0
+    # ==================== END STEP 6 ====================
+
 
 
 

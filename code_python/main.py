@@ -75,7 +75,6 @@ def main(
             infectivity1=INFECTIVITY1,
             infectivity2=INFECTIVITY2,
             stage1_multiplier=STAGE1_TRANSMISSION_MULTIPLIER,
-            stage2_multiplier=STAGE2_TRANSMISSION_MULTIPLIER,
             stage3_multiplier=STAGE3_TRANSMISSION_MULTIPLIER,
             breeding_days=BREEDING_DAYS,
             device=DEVICE
@@ -133,7 +132,7 @@ def main(
             day_in_year=day_in_year,
             base_mortality=MORTALITY,
             disease_mortality_factor_stage1=DISEASE_MORTALITY_FACTOR_STAGE1,
-            disease_mortality_factor_stage2=DISEASE_MORTALITY_FACTOR_STAGE2,
+            #disease_mortality_factor_stage2=DISEASE_MORTALITY_FACTOR_STAGE2,
             disease_mortality_factor_stage3=DISEASE_MORTALITY_FACTOR_STAGE3,
             dispersal_deadline=DISPERSAL_DEADLINE,
             maturity_age=AGE_JUVENILE_TO_ADULT,
@@ -142,7 +141,7 @@ def main(
         )
         timings["death_processing"] += time.perf_counter() - t0
         
-        print_devil_type_counts(simulation_state)
+        print_state(simulation_state)
 
         # --- Stoppage logic ---
         t0 = time.perf_counter()

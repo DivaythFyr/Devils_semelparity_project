@@ -106,18 +106,28 @@ def infection_spread(
     infectivity1: float = INFECTIVITY1,
     infectivity2: float = INFECTIVITY2,
     stage1_multiplier: float = STAGE1_TRANSMISSION_MULTIPLIER,
-    stage2_multiplier: float = STAGE2_TRANSMISSION_MULTIPLIER,
     stage3_multiplier: float = STAGE3_TRANSMISSION_MULTIPLIER,
     breeding_days: int = BREEDING_DAYS,
     device: th.device = DEVICE
 ) -> None:
     """
-    Spread of infection by new formula:
+    Spread of infection with 2 stages:
+    
+    Stage 1 (Latent):
+    - Duration: STAGE1_DURATION_MIN to STAGE1_DURATION_MAX days
+    - Transmission multiplier: low (STAGE1_TRANSMISSION_MULTIPLIER)
+    - Sexual transmission: disabled (STAGE1_CAN_TRANSMIT_SEXUAL = False)
+    - Contact transmission: enabled with low probability
+    
+    Stage 3 (Terminal):
+    - Duration: STAGE3_DURATION_MIN to STAGE3_DURATION_MAX days
+    - Transmission multiplier: high (STAGE3_TRANSMISSION_MULTIPLIER)
+    - Both sexual and contact transmission enabled
     
     Probability = StageMultiplier × DistanceFactor × (SexualComponent + NonsexualComponent)
     
     Where:
-    - StageMultiplier: 0.1 (stage 1), 5.0 (stage 2), 10.0 (stage 3)
+    - StageMultiplier: 0.1 (stage 1), 7.5 (stage 3)
     - DistanceFactor: (MAX_RADIUS_SQ - dist^2) / MAX_RADIUS_SQ, from 0 to 1
     - SexualComponent: infectivity1 (only during breeding season, only adults)
     - NonsexualComponent: infectivity2 (always, but depends on stage)
@@ -129,7 +139,6 @@ def infection_spread(
         infectivity1: Base probability of sexual transmission
         infectivity2: Base probability of non-sexual transmission
         stage1_multiplier: Multiplier for latent stage
-        stage2_multiplier: Multiplier for infectious stage
         stage3_multiplier: Multiplier for terminal stage
         breeding_days: Number of days for breeding season
         device: Torch device
@@ -150,22 +159,10 @@ def infection_spread(
     infected_mask = state.infection_stage[:n] > 0
     state.age_of_disease[:n] += infected_mask.to(state.age_of_disease.dtype)
     
-    # Transition between stages
-    # Stage 1 → Stage 2
+    # Transition between stages (direct transition from stage 1 to stage 3)
+    # Stage 1 → Stage 3
     stage1_mask = state.infection_stage[:n] == INFECTION_STAGE_LATENT
-    transition_to_stage2 = stage1_mask & (state.age_of_disease[:n] >= state.stage1_duration[:n])
-    
-    if transition_to_stage2.any():
-        state.infection_stage[:n] = th.where(
-            transition_to_stage2,
-            INFECTION_STAGE_INFECTIOUS,
-            state.infection_stage[:n]
-        )
-    
-    # Stage 2 → Stage 3
-    stage2_mask = state.infection_stage[:n] == INFECTION_STAGE_INFECTIOUS
-    transition_to_stage3 = stage2_mask & \
-                          (state.age_of_disease[:n] >= (state.stage1_duration[:n] + state.stage2_duration[:n]))
+    transition_to_stage3 = stage1_mask & (state.age_of_disease[:n] >= state.stage1_duration[:n])
     
     if transition_to_stage3.any():
         state.infection_stage[:n] = th.where(
@@ -178,7 +175,7 @@ def infection_spread(
     # Only residents can transmit/receive infection
     resident_mask = (state.status[:n] == STATUS_ADULT) | (state.status[:n] == STATUS_JUVENILE_TERR)
     
-    # WHO CAN TRANSMIT: residents in stages 1, 2 or 3
+    # WHO CAN TRANSMIT: residents in stages 1 or 3
     can_transmit_mask = resident_mask & (state.infection_stage[:n] > 0)
     
     # WHO CAN BE INFECTED: healthy residents
@@ -204,7 +201,6 @@ def infection_spread(
         infectivity1=infectivity1,
         infectivity2=infectivity2,
         stage1_multiplier=stage1_multiplier,
-        stage2_multiplier=stage2_multiplier,
         stage3_multiplier=stage3_multiplier,
         breeding_days=breeding_days,
         device=device
@@ -227,6 +223,7 @@ def infection_spread(
             state.num_infection += new_indices.numel()
 
 
+
 # ==================== AUXILIARY FUNCTIONS (remain unchanged) ====================
 
 def initialize_disease_durations(
@@ -236,12 +233,15 @@ def initialize_disease_durations(
 ) -> None:
     """
     Initializes random durations of disease stages for newly infected.
+    Now with 2 stages:
+    - Stage 1: Latent (STAGE1_DURATION_MIN to STAGE1_DURATION_MAX days)
+    - Stage 3: Terminal (STAGE3_DURATION_MIN to STAGE3_DURATION_MAX days)
     """
     num_new = infected_indices.shape[0]
     if num_new == 0:
         return
     
-    # Stage 1: Latent (0.5-1.0 years)
+    # Stage 1: Latent
     stage1_durations = th.randint(
         low=STAGE1_DURATION_MIN,
         high=STAGE1_DURATION_MAX + 1,
@@ -250,16 +250,7 @@ def initialize_disease_durations(
         dtype=th.float32
     )
     
-    # Stage 2: Infectious (0.25-1.0 years)
-    stage2_durations = th.randint(
-        low=STAGE2_DURATION_MIN,
-        high=STAGE2_DURATION_MAX + 1,
-        size=(num_new,),
-        device=device,
-        dtype=th.float32
-    )
-    
-    # Stage 3: Terminal (0.5-1.0 years)
+    # Stage 3: Terminal
     stage3_durations = th.randint(
         low=STAGE3_DURATION_MIN,
         high=STAGE3_DURATION_MAX + 1,
@@ -268,9 +259,8 @@ def initialize_disease_durations(
         dtype=th.float32
     )
     
-    # Set durations
+    # Set durations 
     state.stage1_duration[infected_indices] = stage1_durations
-    state.stage2_duration[infected_indices] = stage2_durations
     state.stage3_duration[infected_indices] = stage3_durations
 
 
@@ -281,10 +271,10 @@ def seed_pathogen(
 ) -> None:
     """
     Infect initial residents with RANDOM disease stages for realism.
-    First infected individuals start at different points in disease progression.
+    Now with 2 stages: latent and terminal.
     
-    Modifies state in-place. Does not return.
-
+    Distribution: ~60% latent, ~40% terminal
+    
     Args:
         state: SimulationState object to modify
         num_infected: Number of residents to infect (default: 10)
@@ -294,71 +284,36 @@ def seed_pathogen(
     if n == 0:
         return
 
-    # Identify residents (adults and territorial juveniles)
     resident_mask = (state.status[:n] == STATUS_ADULT) | (state.status[:n] == STATUS_JUVENILE_TERR)
     resident_indices = th.nonzero(resident_mask, as_tuple=True)[0]
 
     if resident_indices.numel() == 0:
         return
 
-    # Limit number to available residents
     num_to_infect = min(num_infected, resident_indices.numel())
-
-    # Randomly select unique residents to infect
     selected_indices = resident_indices[th.randperm(resident_indices.numel(), device=device)[:num_to_infect]]
 
-    # ==================== DISTRIBUTION BY STAGES ====================
-    # Randomly distribute stages: ~40% latent, ~40% infectious, ~20% terminal
-    num_latent = int(num_to_infect * 0.4)  # ~4 individuals: stage 1
-    num_infectious = int(num_to_infect * 0.4)  # ~4 individuals: stage 2
-    num_terminal = num_to_infect - num_latent - num_infectious  # ~2 individuals: stage 3
+    # Distribution: ~60% latent, ~40% terminal
+    num_latent = int(num_to_infect * 0.6)
+    num_terminal = num_to_infect - num_latent
     
-    # Shuffle indices for random distribution
     permuted_indices = selected_indices[th.randperm(num_to_infect, device=device)]
     
     # Assign stages
     if num_latent > 0:
         latent_indices = permuted_indices[:num_latent]
         state.infection_stage[latent_indices] = INFECTION_STAGE_LATENT
-        state.age_of_disease[latent_indices] = 0  # Start with 0 days
+        state.age_of_disease[latent_indices] = 0
         initialize_disease_durations(state, latent_indices, device)
     
-    if num_infectious > 0:
-        infectious_start = num_latent
-        infectious_end = num_latent + num_infectious
-        infectious_indices = permuted_indices[infectious_start:infectious_end]
-        state.infection_stage[infectious_indices] = INFECTION_STAGE_INFECTIOUS
-        
-        # For infectious, set random disease age (already in the middle of stage 1 or beginning of stage 2)
-        for idx in infectious_indices:
-            # Random duration of stage 1 (180-360 days)
-            stage1_duration = th.randint(
-                STAGE1_DURATION_MIN,
-                STAGE1_DURATION_MAX + 1,
-                (1,), device=device, dtype=th.float32
-            )
-            state.stage1_duration[idx] = stage1_duration
-            
-            # Disease age: somewhere in stage 2 (passed entire stage 1 + part of stage 2)
-            age_in_stage1 = stage1_duration * th.rand((1,), device=device) * 0.2 + stage1_duration * 0.8
-            state.age_of_disease[idx] = age_in_stage1
-    
     if num_terminal > 0:
-        terminal_start = num_latent + num_infectious
-        terminal_indices = permuted_indices[terminal_start:]
+        terminal_indices = permuted_indices[num_latent:]
         state.infection_stage[terminal_indices] = INFECTION_STAGE_TERMINAL
         
-        # For terminal, set random age (already in stage 3)
         for idx in terminal_indices:
-            # Random durations of all stages
             stage1_duration = th.randint(
                 STAGE1_DURATION_MIN,
                 STAGE1_DURATION_MAX + 1,
-                (1,), device=device, dtype=th.float32
-            )
-            stage2_duration = th.randint(
-                STAGE2_DURATION_MIN,
-                STAGE2_DURATION_MAX + 1,
                 (1,), device=device, dtype=th.float32
             )
             stage3_duration = th.randint(
@@ -368,15 +323,11 @@ def seed_pathogen(
             )
             
             state.stage1_duration[idx] = stage1_duration
-            state.stage2_duration[idx] = stage2_duration
             state.stage3_duration[idx] = stage3_duration
             
-            # Disease age: passed stages 1 and 2 + part of stage 3
-            total_stage12 = stage1_duration + stage2_duration
-            age_in_stage3 = stage3_duration * th.rand((1,), device=device) * 0.4 + stage3_duration * 0.3
-            state.age_of_disease[idx] = total_stage12 + age_in_stage3
+            # Disease age: passed stage 1 + random part of stage 3
+            age_in_stage3 = stage3_duration * th.rand((1,), device=device) * 0.7
+            state.age_of_disease[idx] = stage1_duration + age_in_stage3
 
-    # Update infection count
     state.num_infection += num_to_infect
-    
-    print(f"🎲 Initial infection: {num_latent} latent, {num_infectious} infectious, {num_terminal} terminal")
+    #print(f"🎲 Initial infection: {num_latent} latent, {num_terminal} terminal")
