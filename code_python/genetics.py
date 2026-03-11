@@ -172,6 +172,9 @@ def replication(
     # Get mother IDs for each offspring
     mother_ids = state.animal_ids[valid_female_indices]
     mother_ids_expanded = mother_ids.unsqueeze(1).expand(-1, num_progeny).reshape(-1)
+    
+    # Debug print: Check number of offspring per pair and total
+    # print(f"Number of mating pairs: {num_valid}, Offspring per pair: {num_progeny}, Total offspring generated: {offspring_x.shape[0]}")
     # ==================== END PREPARE OFFSPRING DATA ====================
 
     # ==================== 6. STORE AS PENDING OFFSPRING ====================

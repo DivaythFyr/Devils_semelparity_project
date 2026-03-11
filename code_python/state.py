@@ -6,7 +6,8 @@ from constants import (
     DEVICE, MAX_POP_SIZE, INIT_POP_SIZE,
     STATUS_CHILD, REPLICATION_MATRIX_INIT, NUM_OF_PROGENY,
     STATUS_JUVENILE_NO_TERR, STATUS_JUVENILE_TERR, STATUS_ADULT,
-    INFECTIVITY1, INFECTIVITY2
+    INFECTIVITY1, INFECTIVITY2,
+    SEMELPAROUS_MASK, ITEROPAROUS_MASK
 )
 
 @dataclass
@@ -172,8 +173,6 @@ def create_initial_state(
     )
     
     
-
-
 @dataclass
 class SimulationStats:
     time: int
@@ -263,7 +262,7 @@ def collect_statistics(
         )
 
     infected: int = int((state.infection_stage[:n] > 0).sum().item())
-    semel_mask = (state.chrom_a[:n].sum(1) == 2)
+    semel_mask = (state.chrom_a[:n].sum(1) == SEMELPAROUS_MASK)
     semel_count: int = int(semel_mask.sum().item())
     itero_count: int = n - semel_count
 
@@ -290,8 +289,8 @@ def collect_statistics(
     males_mask = state.sex[:n] == True
     
     # Masks for genotype
-    semel_mask = state.chrom_a[:n].sum(dim=1) == 2
-    iterop_mask = state.chrom_a[:n].sum(dim=1) == 0
+    semel_mask = state.chrom_a[:n].sum(dim=1) == SEMELPAROUS_MASK
+    iterop_mask = state.chrom_a[:n].sum(dim=1) == ITEROPAROUS_MASK
     
     # Compute detailed counts
     children_semel_females = int((children_mask & semel_mask & females_mask).sum().item())

@@ -23,7 +23,7 @@ MAX_AGE: int = 720
 INIT_POP_SIZE: int = 2000         
 # Default initial population size. Used in: initialize_population().
 
-MAX_POP_SIZE: int = 3000       
+MAX_POP_SIZE: int = 10000       
 # Safety cap for tensor preallocation. Used in: create_initial_state().
 
 INITIAL_FITNESS: float = 100.0  
@@ -97,7 +97,6 @@ TIME_OF_DISPERSAL: int = 60
 DISPERSAL_DEADLINE: int = TIME_OF_DISPOSAL + TIME_OF_DISPERSAL  
 # Last day for juveniles without territory to secure one before death. 
 # Used in: death_by_no_territory(), disperse_offspring().
-
 
 INCUBATION: int = 225  # Average 225 days (180-270) instead of 60             
 # Days in incubation phase before infection becomes active (phase 1 duration). 
@@ -214,4 +213,12 @@ SEMELPAROUS_DEATH_DAY: int = 10 # Days after breeding when semelparous adults di
 ## Proportions for stoppage logic
 SEMELPAROUS_WIN_PROPORTION: float = 0.99
 ITEROPAROUS_WIN_PROPORTION: float = 0.99
+
+
+# How do we set semelparous and iteroparous at the beginning of simulation
+# homozygous semelparous = 2, because 1 + 1.
+# homozygous iteroparous = 0, because 0 + 0.
+SEMELPAROUS_MASK: int = 2
+ITEROPAROUS_MASK: int = 0
+
 

@@ -1,6 +1,5 @@
 # file for functions that operate on SimulationState objects,
 # not specialized like, for instance, infection.py
-
 from constants import *
 from state import SimulationState, SimulationStats
 import torch as th
@@ -327,6 +326,9 @@ def disperse_offspring(
         state.speed_x[to_disperse] = 0.0
         state.speed_y[to_disperse] = 0.0
         
+        # debug print to check are children multiple of three
+        # print_is_offspring_divided_on_three(state)
+        
 def add_pending_offspring(
     state: SimulationState,
     x: Tensor,
@@ -368,6 +370,10 @@ def add_pending_offspring(
     state.pending_offspring_mother_id[start:end] = mother_id[:actual_new]
     
     state.pending_offspring_count += actual_new
+    
+    # Debug print: Check number of offspring added per mother
+    # unique_mothers, counts = th.unique(mother_id[:actual_new], return_counts=True)
+    # print(f"Added {actual_new} offspring. Offspring per mother: {dict(zip(unique_mothers.tolist(), counts.tolist()))}")
 
 
 def birth_pending_offspring(
@@ -408,6 +414,11 @@ def birth_pending_offspring(
         device=device
     )
     
+    # Debug print: Check number of offspring born per mother
+    # unique_mothers, counts = th.unique(state.pending_offspring_mother_id[:count], return_counts=True)
+    # print(f"Born {count} offspring. Offspring per mother: {dict(zip(unique_mothers.tolist(), counts.tolist()))}")
+    print_is_offspring_divided_on_three(state)
+    
     # Clear pending offspring
     state.pending_offspring_count = 0
 
@@ -439,7 +450,7 @@ def transition_child_to_juvenile_no_terr(
     state.speed_x[indices] = 0.0
     state.speed_y[indices] = 0.0
     
-    print('transition from child to non-terr juvenile, num transitioned:', indices.shape[0])
+    # print('transition from child to non-terr juvenile, num transitioned:', indices.shape[0])
     
     
 def transition_juvenile_no_terr_to_terr(
@@ -501,7 +512,7 @@ def transition_juvenile_no_terr_to_terr(
     state.territory_center_x[successful_indices] = state.x[successful_indices].clone()
     state.territory_center_y[successful_indices] = state.y[successful_indices].clone()
     
-    print('transition from non-terr juvenile to terr juvenile, num transitioned:', successful_indices.shape[0])
+    # print('transition from non-terr juvenile to terr juvenile, num transitioned:', successful_indices.shape[0])
     
         
 def transition_juvenile_terr_to_adult(
@@ -663,25 +674,24 @@ def process_all_deaths(
             death_mask |= prob_death_mask
     
     # ==================== 5. DEATH BY SEMELPARITY (all semelparous males die after breeding season regardless of mating) ====================
-    if day_in_year == semelparous_death_day:
-        # Semelparous: both alleles are 1 (sum == 2)
-        is_semelparous: Tensor = state.chrom_a[:n].sum(dim=1) == 2
+    # if day_in_year == semelparous_death_day:
+    #     # Semelparous: both alleles are 1 (sum == 2)
+    #     is_semelparous: Tensor = state.chrom_a[:n].sum(dim=1) == 2
         
-        # Males: sex == True (1)
-        is_male: Tensor = state.sex[:n] == True
+    #     # Males: sex == True (1)
+    #     is_male: Tensor = state.sex[:n] == True
         
-        # Adults only (juveniles don't die from semelparity)
-        is_adult: Tensor = state.status[:n] == STATUS_ADULT
+    #     # Adults only (juveniles don't die from semelparity)
+    #     is_adult: Tensor = state.status[:n] == STATUS_ADULT
         
-        # ALL semelparous adult males die, regardless of mating status
-        semelparous_death_mask: Tensor = is_semelparous & is_male & is_adult
-        death_mask |= semelparous_death_mask
+    #     # ALL semelparous adult males die, regardless of mating status
+    #     semelparous_death_mask: Tensor = is_semelparous & is_male & is_adult
+    #     death_mask |= semelparous_death_mask
     
     # ==================== 6. APPLY ALL DEATHS ====================
     if death_mask.any():
         indices_to_remove = th.nonzero(death_mask, as_tuple=True)[0]
         delete_animal(state, indices_to_remove, day_in_year=day_in_year)
-
 
 
 def check_simulation_stop(
@@ -769,7 +779,6 @@ def print_devil_type_counts(state: SimulationState) -> None:
     juv_no_terr_count = (state.status[:n] == STATUS_JUVENILE_NO_TERR).sum().item()
     juv_terr_count = (state.status[:n] == STATUS_JUVENILE_TERR).sum().item()
     adults_count = (state.status[:n] == STATUS_ADULT).sum().item()
-    #males_count = (state.sex[:n] == True).sum().item()
     
     print(f"Children: {children_count}, Juveniles no terr: {juv_no_terr_count}, Juveniles terr: {juv_terr_count}, Adults: {adults_count}")
 
@@ -812,5 +821,85 @@ def print_state(state: SimulationState) -> None:
             for sex_name, sex_mask in [("Females", females), ("Males", males)]:
                 count = (type_mask & geno_mask & sex_mask).sum().item()
                 print(f"{type_name} {geno_name} {sex_name}: {count}")
+                
+
+def print_is_offspring_divided_on_three(state: SimulationState) -> None:
+    """
+    Prints the number of iteroparous and semelparous children,
+    and checks if the total number of children is a multiple of 3.
+    
+    Args:
+        state: SimulationState object.
+    """
+    pop_size = state.pop_size
+    
+    # Find children within the active population
+    children_mask = state.status[:pop_size] == STATUS_CHILD
+    num_children = int(children_mask.sum().item())
+    
+    if num_children == 0:
+        print("No children found.")
+        return
+    
+    # Get genotypes for children only
+    chrom_sum_children = state.chrom_a[:pop_size][children_mask].sum(dim=1)
+    
+    # Count semelparous (chrom_sum == 2) and iteroparous (chrom_sum == 0)
+    semel_count = int((chrom_sum_children == 2).sum().item())
+    iterop_count = int((chrom_sum_children < 2).sum().item())
+    hetero_count = int((chrom_sum_children ==1).sum().item())
+    
+    # Check if total children is multiple of 3
+    is_multiple_of_three = num_children % 3 == 0
+    multiple_str = "is" if is_multiple_of_three else "is not"
+    
+    print(f"Total children: {num_children} ({multiple_str} a multiple of 3)")
+    print(f"  Iteroparous children (AA): {iterop_count}")
+    print(f"  Heterozygous children (Aa): {hetero_count}")
+    print(f"  Semelparous children (aa): {semel_count}")
+    
+    
+def print_children_same_coordinate(state: SimulationState) -> None:
+    """
+    Prints how many children share the same (x, y) coordinate.
+    
+    Args:
+        state: SimulationState object.
+    """
+    pop_size = state.pop_size
+    
+    # Find children within the active population
+    children_mask = state.status[:pop_size] == STATUS_CHILD
+    num_children = int(children_mask.sum().item())
+    
+    if num_children == 0:
+        print("No children found.")
+        return
+    
+    # Get children coordinates
+    x_children = state.x[:pop_size][children_mask]
+    y_children = state.y[:pop_size][children_mask]
+    
+    # Stack into (N, 2) tensor and find unique coordinates
+    coords = th.stack([x_children, y_children], dim=1)
+    unique_coords, inverse, counts = th.unique(coords, dim=0, return_inverse=True, return_counts=True)
+    
+    num_unique = unique_coords.shape[0]
+    num_sharing = int((counts > 1).sum().item())
+    children_on_shared = int(counts[counts > 1].sum().item())
+    max_stacked = int(counts.max().item())
+    
+    print(f"--- Children coordinate stacking ---")
+    print(f"  Total children: {num_children}")
+    print(f"  Unique coordinates: {num_unique}")
+    print(f"  Coordinates with >1 child: {num_sharing}")
+    print(f"  Children on shared coords: {children_on_shared}")
+    print(f"  Max children at one spot: {max_stacked}")
+    
+    # Distribution of stack sizes
+    for stack_size in range(2, max_stacked + 1):
+        num_spots = int((counts == stack_size).sum().item())
+        if num_spots > 0:
+            print(f"    {num_spots} spots with exactly {stack_size} children")
     
 

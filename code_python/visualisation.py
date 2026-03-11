@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
 import imageio.v2 as imageio
+import shutil
 
 from state import SimulationState
 from constants import (
@@ -23,12 +24,15 @@ def create_output_folders(
     snapshots_path.mkdir(parents=True, exist_ok=True)
     return {"base": base_path, "snapshots": snapshots_path}
 
+
 def draw_snapshot(
     state,
     output_folder,
     run_num=0,
-    figsize=(16, 4)
+    figsize=(16, 6)
 ):
+    from matplotlib.patches import Patch
+
     n = state.pop_size
     time_step = state.current_time
     if n == 0:
@@ -54,24 +58,24 @@ def draw_snapshot(
     # Color and size arrays
     colors = np.full(n, "gray", dtype=object)
     sizes = np.full(n, 40, dtype=float)
-    edgecolors = np.array(["none"] * n, dtype=object)  # Ensure 1D array of strings
+    edgecolors = np.array(["none"] * n, dtype=object)
 
-    # Assign colors by class (same as devils_with_kids)
-    colors[is_child & is_itero] = "limegreen"      # Child Iteroparous
-    colors[is_child & is_semel] = "aquamarine"     # Child Semelparous
-    colors[is_child & is_heterozygous] = "purple"     # Child Heterozygous
-    
-    colors[is_juvenile_no_terr & is_itero] = "khaki"       # Juvenile Iteroparous
-    colors[is_juvenile_no_terr & is_semel] = "lightblue"   # Juvenile No Territory Semelparous
-    colors[is_juvenile_no_terr & is_heterozygous] = "orange"   # Juvenile No Territory Heterozygous
-    
-    colors[is_juvenile_terr & is_itero] = "#330019"       # Juvenile Territory Iteroparous
-    colors[is_juvenile_terr & is_semel] = "#99004C"   # Juvenile Territory Semelparous
-    colors[is_juvenile_terr & is_heterozygous] = "pink"   # Juvenile Territory Heterozygous
-    
-    colors[is_adult & is_itero] = "y"              # Adult Iteroparous
-    colors[is_adult & is_semel] = "dodgerblue"     # Adult Semelparous
-    colors[is_adult & is_heterozygous] = "brown"     # Adult Heterozygous
+    # Assign colors by class
+    colors[is_child & is_itero] = "limegreen"
+    colors[is_child & is_semel] = "aquamarine"
+    colors[is_child & is_heterozygous] = "purple"
+
+    colors[is_juvenile_no_terr & is_itero] = "khaki"
+    colors[is_juvenile_no_terr & is_semel] = "lightblue"
+    colors[is_juvenile_no_terr & is_heterozygous] = "orange"
+
+    colors[is_juvenile_terr & is_itero] = "#330019"
+    colors[is_juvenile_terr & is_semel] = "#99004C"
+    colors[is_juvenile_terr & is_heterozygous] = "pink"
+
+    colors[is_adult & is_itero] = "y"
+    colors[is_adult & is_semel] = "dodgerblue"
+    colors[is_adult & is_heterozygous] = "brown"
 
     # Sizes
     sizes[is_child] = 30
@@ -83,9 +87,41 @@ def draw_snapshot(
     edgecolors[is_infected] = "red"
     sizes[is_infected] += 10
 
-    # Plot
+    # --- Count animals in each category ---
+    count_child_itero = int((is_child & is_itero).sum())
+    count_child_semel = int((is_child & is_semel).sum())
+    count_child_hetero = int((is_child & is_heterozygous).sum())
+    count_juv_nt_itero = int((is_juvenile_no_terr & is_itero).sum())
+    count_juv_nt_semel = int((is_juvenile_no_terr & is_semel).sum())
+    count_juv_nt_hetero = int((is_juvenile_no_terr & is_heterozygous).sum())
+    count_juv_t_itero = int((is_juvenile_terr & is_itero).sum())
+    count_juv_t_semel = int((is_juvenile_terr & is_semel).sum())
+    count_juv_t_hetero = int((is_juvenile_terr & is_heterozygous).sum())
+    count_adult_itero = int((is_adult & is_itero).sum())
+    count_adult_semel = int((is_adult & is_semel).sum())
+    count_adult_hetero = int((is_adult & is_heterozygous).sum())
+    count_infected = int(is_infected.sum())
+
+    # --- Legend entries with counts ---
+    legend_items = [
+        Patch(facecolor="limegreen", edgecolor="black", label=f"Child Itero ({count_child_itero})"),
+        Patch(facecolor="aquamarine", edgecolor="black", label=f"Child Semel ({count_child_semel})"),
+        Patch(facecolor="purple", edgecolor="black", label=f"Child Hetero ({count_child_hetero})"),
+        Patch(facecolor="khaki", edgecolor="black", label=f"Juv NoTerr Itero ({count_juv_nt_itero})"),
+        Patch(facecolor="lightblue", edgecolor="black", label=f"Juv NoTerr Semel ({count_juv_nt_semel})"),
+        Patch(facecolor="orange", edgecolor="black", label=f"Juv NoTerr Hetero ({count_juv_nt_hetero})"),
+        Patch(facecolor="#330019", edgecolor="black", label=f"Juv Terr Itero ({count_juv_t_itero})"),
+        Patch(facecolor="#99004C", edgecolor="black", label=f"Juv Terr Semel ({count_juv_t_semel})"),
+        Patch(facecolor="pink", edgecolor="black", label=f"Juv Terr Hetero ({count_juv_t_hetero})"),
+        Patch(facecolor="y", edgecolor="black", label=f"Adult Itero ({count_adult_itero})"),
+        Patch(facecolor="dodgerblue", edgecolor="black", label=f"Adult Semel ({count_adult_semel})"),
+        Patch(facecolor="brown", edgecolor="black", label=f"Adult Hetero ({count_adult_hetero})"),
+        Patch(facecolor="white", edgecolor="red", linewidth=2, label=f"Infected ({count_infected})"),
+    ]
+
+    # --- Plot ---
     fig, ax = plt.subplots(figsize=figsize)
-    ax.scatter(x, y, c=colors, s=sizes, edgecolors=edgecolors.tolist(), alpha=0.8, linewidth=1.5)
+    ax.scatter(x, y, c=colors, s=sizes, edgecolors=edgecolors.tolist(), alpha=0.3, linewidth=1.5)
     ax.set_xlim(0, state.map_x_size if hasattr(state, "map_x_size") else MAP_X_SIZE)
     ax.set_ylim(0, state.map_y_size if hasattr(state, "map_y_size") else MAP_Y_SIZE)
     ax.set_xlabel("X")
@@ -93,10 +129,28 @@ def draw_snapshot(
     ax.set_title(f"Spatial Distribution (Time: {time_step}, Pop: {n})")
     ax.set_aspect('equal', adjustable='box')
 
-    plt.tight_layout()
+    # Place legend above the map
+    fig.legend(
+        handles=legend_items,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.98),
+        ncol=4,
+        fontsize=7,
+        frameon=True,
+        fancybox=True,
+        shadow=False,
+        handlelength=1.5,
+        handleheight=1.0,
+        columnspacing=1.0,
+    )
+
+    # Make room at the top for the legend
+    fig.subplots_adjust(top=0.78)
+
     filename = output_folder / f"snapshot_{run_num:03d}_{time_step:06d}.png"
     plt.savefig(filename, dpi=150, bbox_inches='tight')
     plt.close(fig)
+
 
 def create_gif_from_snapshots(
     snapshot_folder: Path,
@@ -119,10 +173,10 @@ def create_gif_from_snapshots(
         duration=int(duration * 1000),
         loop=0
     )
-    if cleanup:
-        for png_file in png_files:
-            png_file.unlink()
-        print(f"🗑️ Cleaned up {len(png_files)} PNG files")
+    # if cleanup:
+    #     for png_file in png_files:
+    #         png_file.unlink()
+    #     print(f"🗑️ Cleaned up {len(png_files)} PNG files")
     return gif_path
 
 def should_draw_snapshot(
@@ -135,3 +189,18 @@ def should_draw_snapshot(
     if draw_interval is not None:
         return time_step % draw_interval == 0
     return time_step == 0 or time_step % 1000 == 0
+
+def delete_sub_snapshots(image_folder: str) -> None:
+    """
+    Deletes the contents of the folder containing sub-snapshot images, but keeps the folder.
+    
+    Args:
+        image_folder: Path to the folder whose contents to delete.
+    """
+    folder_path = Path(image_folder)
+    if folder_path.exists() and folder_path.is_dir():
+        for file_path in folder_path.glob("*.png"):  # Adjust pattern if needed (e.g., "*" for all files)
+            file_path.unlink()
+        print(f"Deleted contents of folder: {image_folder}")
+    else:
+        print(f"Folder not found: {image_folder}")

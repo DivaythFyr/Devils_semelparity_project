@@ -11,7 +11,7 @@ import argparse
 import sys
 
 # ---- TIME CONFIG ----
-TIMEPOINTS: int = 42000
+TIMEPOINTS: int = 330
 # Total simulated days (iterations in main loop). Used in: main().
 
 
@@ -32,10 +32,10 @@ def main(
     run_num: int = 0
     folders: dict[str, Path] = create_output_folders(base_folder=base_output_folder, run_num=run_num)
     stats_list: list[SimulationStats] = []
-    draw_times: set[int] = {t for t in range(0, TIMEPOINTS, 100)}
+    draw_times: set[int] = {t for t in range(0, TIMEPOINTS, 1)}
     
     PRINT_INTERVAL: int = 1 # Print every n timesteps
-    STATS_INTERVAL: int = 30 # Collect stats every n timesteps
+    STATS_INTERVAL: int = 50 # Collect stats every n timesteps
 
     # --- Benchmarking setup ---
     section_names = [
@@ -47,6 +47,8 @@ def main(
     timings = {name: 0.0 for name in section_names}
     total_loop_time = 0.0
     # --- End benchmarking setup ---
+    
+    delete_sub_snapshots('../output/snapshots_run_000')
 
     for t in range(TIMEPOINTS):
         loop_start = time.perf_counter()
@@ -132,7 +134,6 @@ def main(
             day_in_year=day_in_year,
             base_mortality=MORTALITY,
             disease_mortality_factor_stage1=DISEASE_MORTALITY_FACTOR_STAGE1,
-            #disease_mortality_factor_stage2=DISEASE_MORTALITY_FACTOR_STAGE2,
             disease_mortality_factor_stage3=DISEASE_MORTALITY_FACTOR_STAGE3,
             dispersal_deadline=DISPERSAL_DEADLINE,
             maturity_age=AGE_JUVENILE_TO_ADULT,
@@ -160,16 +161,18 @@ def main(
         if t % STATS_INTERVAL == 0:
             stats: SimulationStats = collect_statistics(simulation_state, run_num=run_num)
             stats_list.append(stats)
+            
+            print_children_same_coordinate(simulation_state)
         timings["statistics_collection"] += time.perf_counter() - t0
 
         # --- Visualization ---
         t0 = time.perf_counter()
-        # if t in draw_times:
-        #     draw_snapshot(
-        #         state=simulation_state,
-        #         output_folder=folders["snapshots"],
-        #         run_num=run_num
-        #     )
+        if t in draw_times:
+            draw_snapshot(
+                state=simulation_state,
+                output_folder=folders["snapshots"],
+                run_num=run_num
+            )
         timings["visualization"] += time.perf_counter() - t0
 
         # --- Progress reporting ---
@@ -189,12 +192,11 @@ def main(
     df.to_csv(csv_path, index=False)
     print(f"📊 Statistics saved: {csv_path}")
 
-    # create_gif_from_snapshots(
-    #     snapshot_folder=folders["snapshots"],
-    #     output_folder=Path(base_output_folder),  # Use custom base folder
-    #     gif_name=gif_name,  # Use custom GIF filename
-    #     duration=0.5
-    # )
+    create_gif_from_snapshots(
+        snapshot_folder=folders["snapshots"],
+        output_folder=Path(base_output_folder),  # Use custom base folder
+        duration=0.5
+    )
     
     # Print stoppage reason in a parseable format for run_multiple_experiments.py
     print(f"STOPPAGE_REASON:{simulation_state.stoppage_reason}")
