@@ -222,3 +222,6 @@ SEMELPAROUS_MASK: int = 2
 ITEROPAROUS_MASK: int = 0
 
 
+CHILD_BIRTH_RADIUS: float = 1.0 # how far from the parent the child could be born. Used in: birth_pending_offspring() (initial position of newborns).
+
+

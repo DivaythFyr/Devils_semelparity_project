@@ -1,5 +1,6 @@
 # file for functions that operate on SimulationState objects,
 # not specialized like, for instance, infection.py
+import math
 from constants import *
 from state import SimulationState, SimulationStats
 import torch as th
@@ -398,10 +399,16 @@ def birth_pending_offspring(
     
     device = state.x.device
     
+    # Small random offset (radius <= 1) so children don't stack on mother
+    angle = th.rand(count, device=device) * (2 * math.pi)
+    radius = th.sqrt(th.rand(count, device=device)) * CHILD_BIRTH_RADIUS  # uniform within disk
+    offset_x = radius * th.cos(angle)
+    offset_y = radius * th.sin(angle)
+    
     add_animal(
         state,
-        x=state.pending_offspring_x[:count].clone(),
-        y=state.pending_offspring_y[:count].clone(),
+        x=state.pending_offspring_x[:count].clone() + offset_x,
+        y=state.pending_offspring_y[:count].clone() + offset_y,
         age=th.zeros(count, dtype=state.age.dtype, device=device),
         sex=state.pending_offspring_sex[:count].clone(),
         chrom_sex=state.pending_offspring_chrom_sex[:count].clone(),
@@ -417,7 +424,7 @@ def birth_pending_offspring(
     # Debug print: Check number of offspring born per mother
     # unique_mothers, counts = th.unique(state.pending_offspring_mother_id[:count], return_counts=True)
     # print(f"Born {count} offspring. Offspring per mother: {dict(zip(unique_mothers.tolist(), counts.tolist()))}")
-    print_is_offspring_divided_on_three(state)
+    # print_is_offspring_divided_on_three(state)
     
     # Clear pending offspring
     state.pending_offspring_count = 0
@@ -462,7 +469,7 @@ def transition_juvenile_no_terr_to_terr(
     A juvenile can acquire territory only if their Fitness > fitness_threshold.
     
     Uses fully vectorized approach: calculates fitness for all candidates at once
-    against current territory holders, without sequential recalculation.
+    against all individuals, without sequential recalculation.
     This matches the logic in devils_with_kids.py.
 
     Args:
@@ -480,39 +487,29 @@ def transition_juvenile_no_terr_to_terr(
     if juv_no_terr_indices.numel() == 0:
         return
 
-    # Get current territory holders (adults + juveniles with territory)
-    has_territory_mask = (state.status[:n] == STATUS_ADULT) | (state.status[:n] == STATUS_JUVENILE_TERR)
+    # CHANGED: Use ALL individuals as competitors, not just territory holders.
+    # In devils_with_kids.py, CalculateAreaAndFitness() computes the overlap
+    # against the full N×N distance matrix (all individuals), so children,
+    # other no-terr juveniles, and siblings all reduce a juvenile's fitness.
+    all_x = state.x[:n]                                                          # <── ALL individuals
+    all_y = state.y[:n]                                                          # <── as competitors
 
-    if has_territory_mask.sum() == 0:
-        # No competition, all juveniles can get territory
-        successful_indices = juv_no_terr_indices
-    else:
-        # Positions of territory holders
-        terr_x = state.x[:n][has_territory_mask]
-        terr_y = state.y[:n][has_territory_mask]
+    juv_x = state.x[juv_no_terr_indices]
+    juv_y = state.y[juv_no_terr_indices]
 
-        # Positions of juveniles seeking territory
-        juv_x = state.x[juv_no_terr_indices]
-        juv_y = state.y[juv_no_terr_indices]
+    # Fitness is computed against everyone (including self, which will be
+    # excluded by the geometric formula since self-distance = 0 → angle = 0)
+    _, fitness = calculate_fitness_for_candidates(juv_x, juv_y, all_x, all_y)
 
-        # Calculate fitness for all candidates at once (vectorized)
-        _, fitness = calculate_fitness_for_candidates(juv_x, juv_y, terr_x, terr_y)
-
-        # Find juveniles with fitness > threshold
-        can_get_territory = fitness > fitness_threshold
-        successful_indices = juv_no_terr_indices[can_get_territory]
+    can_get_territory = fitness > fitness_threshold
+    successful_indices = juv_no_terr_indices[can_get_territory]
 
     if successful_indices.numel() == 0:
         return
 
-    # Update status
     state.status[successful_indices] = STATUS_JUVENILE_TERR
-
-    # Set territory center to current position
     state.territory_center_x[successful_indices] = state.x[successful_indices].clone()
     state.territory_center_y[successful_indices] = state.y[successful_indices].clone()
-    
-    # print('transition from non-terr juvenile to terr juvenile, num transitioned:', successful_indices.shape[0])
     
         
 def transition_juvenile_terr_to_adult(
@@ -568,8 +565,12 @@ def process_all_deaths(
     death_mask: Tensor = th.zeros(n, dtype=th.bool, device=device)
     
     # ==================== 1. DEATH BY AGE ====================
-    age_death_mask: Tensor = state.age[:n] > MAX_AGE
-    death_mask |= age_death_mask
+    # AFTER: 20× base mortality after MAX_AGE instead of instant death
+    old_age_mask: Tensor = state.age[:n] > MAX_AGE
+    if old_age_mask.any():
+        rand_old: Tensor = th.rand(n, device=device)
+        age_death_mask: Tensor = old_age_mask & (rand_old < base_mortality * 20.0)
+        death_mask |= age_death_mask
     
     # ==================== 2. DEATH BY BASE MORTALITY ====================
     rand_mortality: Tensor = th.rand(n, device=device)
@@ -659,11 +660,11 @@ def process_all_deaths(
         
         if prob_death_candidates.any():
             # fitness_factor: lower fitness = higher death chance (0 to 1)
-            fitness_factor: Tensor = th.clamp(1.0 - (fitness / 100.0), min=0.0, max=1.0)
+            fitness_factor: Tensor = th.nn.functional.relu(80.0 - fitness) / 80.0
             
             # age_over_deadline: normalized time past deadline (0 to 1)
             age_range: float = float(maturity_age - dispersal_deadline)
-            age_over_deadline: Tensor = (ages.float() - dispersal_deadline) / age_range
+            age_over_deadline = (ages > dispersal_deadline).float()
             age_over_deadline = th.clamp(age_over_deadline, min=0.0, max=1.0)
             
             # Death probability = fitness_factor * age_over_deadline
@@ -674,19 +675,19 @@ def process_all_deaths(
             death_mask |= prob_death_mask
     
     # ==================== 5. DEATH BY SEMELPARITY (all semelparous males die after breeding season regardless of mating) ====================
-    # if day_in_year == semelparous_death_day:
-    #     # Semelparous: both alleles are 1 (sum == 2)
-    #     is_semelparous: Tensor = state.chrom_a[:n].sum(dim=1) == 2
+    if day_in_year == semelparous_death_day:
+        # Semelparous: both alleles are 1 (sum == 2)
+        is_semelparous: Tensor = state.chrom_a[:n].sum(dim=1) == 2
         
-    #     # Males: sex == True (1)
-    #     is_male: Tensor = state.sex[:n] == True
+        # Males: sex == True (1)
+        is_male: Tensor = state.sex[:n] == True
         
-    #     # Adults only (juveniles don't die from semelparity)
-    #     is_adult: Tensor = state.status[:n] == STATUS_ADULT
+        # Adults only (juveniles don't die from semelparity)
+        is_adult: Tensor = state.status[:n] == STATUS_ADULT
         
-    #     # ALL semelparous adult males die, regardless of mating status
-    #     semelparous_death_mask: Tensor = is_semelparous & is_male & is_adult
-    #     death_mask |= semelparous_death_mask
+        # ALL semelparous adult males die, regardless of mating status
+        semelparous_death_mask: Tensor = is_semelparous & is_male & is_adult
+        death_mask |= semelparous_death_mask
     
     # ==================== 6. APPLY ALL DEATHS ====================
     if death_mask.any():

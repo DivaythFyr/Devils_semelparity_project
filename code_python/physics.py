@@ -206,23 +206,28 @@ def calculate_fitness_for_candidates(
         return th.tensor([], device=candidate_x.device), th.tensor([], device=candidate_x.device)
 
     if competitor_x.numel() == 0:
-        # No competitors, full fitness
         area = th.full((candidate_x.numel(),), max_area, device=candidate_x.device)
         fitness = th.full((candidate_x.numel(),), 100.0, device=candidate_x.device)
         return area, fitness
 
-    # Calculate pairwise squared distances
+    # Pairwise squared distances: [num_candidates, num_competitors]
     dist_sq = calculate_pairwise_distances(candidate_x, candidate_y, competitor_x, competitor_y)
 
-    # Count neighbors within range
-    overlap_count = (dist_sq < range_sq).sum(dim=1).float()
+    # Geometric overlap (lens-area formula), matching devils_with_kids.py:
+    # Only pairs within 4*RangeSq can overlap (2*Range = max distance for circle intersection)
+    X_copy = (dist_sq < 4 * range_sq).float() - dist_sq.eq(0).float()
+    # AngleAlpha = 2 * acos(d / (2*Range)) for overlapping pairs
+    AngleAlpha = 2 * X_copy * th.acos(
+        th.clamp(X_copy * th.sqrt(dist_sq / (range_sq * 4)), min=0.0, max=1.0)
+    )
+    # Sum overlap contributions across all competitors for each candidate
+    summ = (AngleAlpha - th.sin(AngleAlpha)).sum(dim=1)
 
-    # Calculate area and fitness using sigmoid formula from devils_with_kids
-    # Area = (pi - overlap / 2) * RangeSq
-    area = (math.pi - overlap_count / 2) * range_sq
+    # Area = (pi - summ/2) * RangeSq
+    area = (math.pi - summ / 2) * range_sq
     area = th.clamp(area, min=0.0)
 
-    # Fitness = 100 / (1 + e^(5 - 10 * Area / MaxArea))
+    # Fitness sigmoid (identical to devils_with_kids.py)
     fitness = 100.0 / (1.0 + th.exp(5.0 - 10.0 * area / max_area))
 
     return area, fitness

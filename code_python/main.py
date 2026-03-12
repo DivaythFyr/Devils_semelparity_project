@@ -11,7 +11,7 @@ import argparse
 import sys
 
 # ---- TIME CONFIG ----
-TIMEPOINTS: int = 330
+TIMEPOINTS: int = 2000
 # Total simulated days (iterations in main loop). Used in: main().
 
 
@@ -32,10 +32,10 @@ def main(
     run_num: int = 0
     folders: dict[str, Path] = create_output_folders(base_folder=base_output_folder, run_num=run_num)
     stats_list: list[SimulationStats] = []
-    draw_times: set[int] = {t for t in range(0, TIMEPOINTS, 1)}
+    draw_times: set[int] = {t for t in range(0, TIMEPOINTS, 10)}
     
     PRINT_INTERVAL: int = 1 # Print every n timesteps
-    STATS_INTERVAL: int = 50 # Collect stats every n timesteps
+    STATS_INTERVAL: int = 1 # Collect stats every n timesteps
 
     # --- Benchmarking setup ---
     section_names = [
@@ -162,7 +162,7 @@ def main(
             stats: SimulationStats = collect_statistics(simulation_state, run_num=run_num)
             stats_list.append(stats)
             
-            print_children_same_coordinate(simulation_state)
+            # print_children_same_coordinate(simulation_state)
         timings["statistics_collection"] += time.perf_counter() - t0
 
         # --- Visualization ---

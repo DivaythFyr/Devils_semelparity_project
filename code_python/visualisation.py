@@ -121,7 +121,7 @@ def draw_snapshot(
 
     # --- Plot ---
     fig, ax = plt.subplots(figsize=figsize)
-    ax.scatter(x, y, c=colors, s=sizes, edgecolors=edgecolors.tolist(), alpha=0.3, linewidth=1.5)
+    ax.scatter(x, y, c=colors, s=sizes, edgecolors=edgecolors.tolist(), alpha=0.5, linewidth=1.5)
     ax.set_xlim(0, state.map_x_size if hasattr(state, "map_x_size") else MAP_X_SIZE)
     ax.set_ylim(0, state.map_y_size if hasattr(state, "map_y_size") else MAP_Y_SIZE)
     ax.set_xlabel("X")
