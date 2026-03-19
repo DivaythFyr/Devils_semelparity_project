@@ -9,30 +9,29 @@ import pandas as pd
 from visualisation import *
 import argparse
 import sys
+import itertools
 
 # ---- TIME CONFIG ----
-TIMEPOINTS: int = 2000
+TIMEPOINTS: int = 10000
 # Total simulated days (iterations in main loop). Used in: main().
 
 
-def main(
-    infectivity1: float = INFECTIVITY1,
-    infectivity2: float = INFECTIVITY2,
-    base_output_folder: str = "../output",
-    stats_name: str = "simulation_stats.csv"
-) -> None:
-    # Override constants with provided values
-    global INFECTIVITY1, INFECTIVITY2
-    INFECTIVITY1 = infectivity1
-    INFECTIVITY2 = infectivity2
+NUM_OF_TECH_SAMPLES: int = 3
+# Number of technical replicates per parameter set. Used in: run_multiple_experiments.py
 
+
+def main(
+    base_output_folder: str = "../output",
+    stats_name: str = "simulation_stats.csv",
+    gif_name: str = "simulation.gif",
+) -> None:
     simulation_state: SimulationState = create_initial_state()
     initialize_population(simulation_state)
     
     run_num: int = 0
     folders: dict[str, Path] = create_output_folders(base_folder=base_output_folder, run_num=run_num)
     stats_list: list[SimulationStats] = []
-    draw_times: set[int] = {t for t in range(0, TIMEPOINTS, 10)}
+    draw_times: set[int] = {t for t in range(0, TIMEPOINTS, 1)}
     
     PRINT_INTERVAL: int = 1 # Print every n timesteps
     STATS_INTERVAL: int = 1 # Collect stats every n timesteps
@@ -195,7 +194,8 @@ def main(
     create_gif_from_snapshots(
         snapshot_folder=folders["snapshots"],
         output_folder=Path(base_output_folder),  # Use custom base folder
-        duration=0.5
+        duration=0.5,
+        gif_name=gif_name,
     )
     
     # Print stoppage reason in a parseable format for run_multiple_experiments.py
@@ -211,22 +211,58 @@ def main(
     print("=========================\n")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run the Tasmanian Devil simulation.")
-    parser.add_argument('--INFECTIVITY1', type=float, default=INFECTIVITY1, help='Sexual transmission probability parameter.')
-    parser.add_argument('--INFECTIVITY2', type=float, default=INFECTIVITY2, help='Nonsexual transmission probability parameter.')
-    parser.add_argument('--output_folder', type=str, default="../output", help='Base output folder for results.')
-    # parser.add_argument('--output_gif', type=str, default="simulation_run_000.gif", help='Filename for the output GIF.')
-    parser.add_argument('--output_stats', type=str, default="simulation_stats.csv", help='Filename for the output CSV statistics.')
-    
-    args = parser.parse_args()
-    
-    start: float = time.time()
-    main(
-        infectivity1=args.INFECTIVITY1,
-        infectivity2=args.INFECTIVITY2,
-        base_output_folder=args.output_folder,
-        # gif_name=args.output_gif,
-        stats_name=args.output_stats
-    )
-    end: float = time.time()
-    print(f"Simulation runtime: {end - start:.2f} seconds ({(end - start) / 60:.2f} minutes)")
+    parameter_sets: dict[str, list] = {
+        "INFECTIVITY1": [0.0, 0.00001, 0.0001, 0.01, 0.05],
+        "INFECTIVITY2": [0.0, 0.00001, 0.0001, 0.01, 0.05],
+        # You can add more parameters here, e.g.
+        # "MORTALITY": [0.002, 0.003, 0.004],
+    }
+
+    param_names: list[str] = list(parameter_sets.keys())
+    param_value_lists: list[list] = [parameter_sets[name] for name in param_names]
+
+    run_counter: int = 0
+
+    # Loop over all parameter combinations
+    for combo in itertools.product(*param_value_lists):
+        current_params: dict[str, float] = dict(zip(param_names, combo))
+
+        # Technical samples loop
+        for tech_sample in range(NUM_OF_TECH_SAMPLES):
+            run_counter += 1
+
+            # Assign looped values before each main() run
+            for key, value in current_params.items():
+                # Update globals in this file
+                if key in globals():
+                    globals()[key] = value
+
+                # Also update same-name globals in imported modules
+                # (important if you sweep params used inside those modules)
+                for module_name in ("constants", "infection", "physics", "simulation_core", "genetics"):
+                    module = sys.modules.get(module_name)
+                    if module is not None and hasattr(module, key):
+                        setattr(module, key, value)
+
+            # Build a shared output stem: sample + looped params
+            param_suffix = "__".join(
+                f"{k}_{v:g}" if isinstance(v, float) else f"{k}_{v}"
+                for k, v in current_params.items()
+            )
+            output_stem = f"sample_{tech_sample:03d}__{param_suffix}"
+
+            stats_name = f"{output_stem}_statistics.csv"
+            gif_name = f"{output_stem}_animation.gif"
+
+            print(f"\nRun #{run_counter}")
+            print(f"  tech_sample={tech_sample}")
+            print(f"  params={current_params}")
+
+            start: float = time.time()
+            main(
+                base_output_folder="../experiments_outputs",
+                stats_name=stats_name,
+                gif_name=gif_name,
+            )
+            end: float = time.time()
+            print(f"Simulation runtime: {end - start:.2f} seconds ({(end - start) / 60:.2f} minutes)")
