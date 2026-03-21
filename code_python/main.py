@@ -4,71 +4,82 @@ from simulation_core import *
 from infection import *
 from physics import *
 from genetics import *
+
+import itertools
+import sys
 import time
+from pathlib import Path
+
 import pandas as pd
 from visualisation import *
-import argparse
-import sys
-import itertools
+
 
 # ---- TIME CONFIG ----
-TIMEPOINTS: int = 10000
-# Total simulated days (iterations in main loop). Used in: main().
-
+TIMEPOINTS: int = 50
+# Total simulated days (iterations in main loop).
 
 NUM_OF_TECH_SAMPLES: int = 3
-# Number of technical replicates per parameter set. Used in: run_multiple_experiments.py
+# Number of technical replicates per parameter set.
 
 
 def main(
     base_output_folder: str = "../output",
     stats_name: str = "simulation_stats.csv",
-    gif_name: str = "simulation.gif",
 ) -> None:
     simulation_state: SimulationState = create_initial_state()
     initialize_population(simulation_state)
-    
-    run_num: int = 0
-    folders: dict[str, Path] = create_output_folders(base_folder=base_output_folder, run_num=run_num)
+
+    # Build output paths:
+    # One dedicated folder per run, based on CSV stem.
+    # CSV is stored in the same folder as snapshot images.
+    base_path: Path = Path(base_output_folder)
+    base_path.mkdir(parents=True, exist_ok=True)
+
+    csv_stem: str = Path(stats_name).stem
+    snapshots_folder: Path = base_path / "snapshots" / csv_stem
+    snapshots_folder.mkdir(parents=True, exist_ok=True)
+
+    csv_path: Path = snapshots_folder / stats_name
+
     stats_list: list[SimulationStats] = []
     draw_times: set[int] = {t for t in range(0, TIMEPOINTS, 1)}
-    
-    PRINT_INTERVAL: int = 1 # Print every n timesteps
-    STATS_INTERVAL: int = 1 # Collect stats every n timesteps
+
+    PRINT_INTERVAL: int = 1
+    STATS_INTERVAL: int = 1
 
     # --- Benchmarking setup ---
     section_names = [
         "pathogen_seeding", "movement", "infection_spread", "reproduction",
-        "offspring_lifecycle", "aging", "status_transitions", 
+        "offspring_lifecycle", "aging", "status_transitions",
         "death_processing", "stoppage_logic", "statistics_collection",
         "visualization", "progress_reporting"
     ]
     timings = {name: 0.0 for name in section_names}
     total_loop_time = 0.0
     # --- End benchmarking setup ---
-    
-    delete_sub_snapshots('../output/snapshots_run_000')
+
+    # Clean only this run's snapshots folder
+    delete_sub_snapshots(str(snapshots_folder))
 
     for t in range(TIMEPOINTS):
         loop_start = time.perf_counter()
 
         day_in_year: int = simulation_state.current_time % DAYS_PER_YEAR
         n = simulation_state.pop_size
-        
-        # Calculate distances ONCE per timestep. Used in infection spread, calculate fitness, reproduction, movement
+
+        # Calculate distances ONCE per timestep. Used in infection spread, fitness, reproduction, movement.
         distance_x, distance_y, distance_sq = calculate_full_distance_matrix(simulation_state)
 
         # --- Pathogen seeding ---
         t0 = time.perf_counter()
-        num_infected: int = int((simulation_state.infection_stage[:n] > 0).sum().item())  
-        if num_infected == 0: # only if there are no infected
+        num_infected: int = int((simulation_state.infection_stage[:n] > 0).sum().item())
+        if num_infected == 0:
             seed_pathogen(simulation_state)
             print(f"🦠 Pathogen seeded at t={t} (infected count was {num_infected})")
         timings["pathogen_seeding"] += time.perf_counter() - t0
 
         # --- Infection spread ---
         t0 = time.perf_counter()
-        # In main.py, in the "Infection spread" section:
         infection_spread(
             simulation_state,
             distance_sq=distance_sq,
@@ -81,7 +92,7 @@ def main(
             device=DEVICE
         )
         timings["infection_spread"] += time.perf_counter() - t0
-        
+
         # --- Reproduction ---
         t0 = time.perf_counter()
         if day_in_year < BREEDING_DAYS:
@@ -99,7 +110,7 @@ def main(
         t0 = time.perf_counter()
         move(simulation_state, distance_x=distance_x, distance_y=distance_y, distance_sq=distance_sq)
         timings["movement"] += time.perf_counter() - t0
-        
+
         # --- Offspring lifecycle ---
         t0 = time.perf_counter()
         birth_pending_offspring(simulation_state, day_in_year=day_in_year)
@@ -140,8 +151,6 @@ def main(
             device=DEVICE
         )
         timings["death_processing"] += time.perf_counter() - t0
-        
-        #print_state(simulation_state)
 
         # --- Stoppage logic ---
         t0 = time.perf_counter()
@@ -152,25 +161,22 @@ def main(
         ):
             print(f"⏹️ Simulation stopped at t={simulation_state.current_time} (reason: {simulation_state.stoppage_reason})")
             break
-        
         timings["stoppage_logic"] += time.perf_counter() - t0
 
         # --- Statistics collection ---
         t0 = time.perf_counter()
         if t % STATS_INTERVAL == 0:
-            stats: SimulationStats = collect_statistics(simulation_state, run_num=run_num)
+            stats: SimulationStats = collect_statistics(simulation_state, run_num=0)
             stats_list.append(stats)
-            
-            # print_children_same_coordinate(simulation_state)
         timings["statistics_collection"] += time.perf_counter() - t0
 
-        # --- Visualization ---
+        # --- Visualization (snapshots only) ---
         t0 = time.perf_counter()
         if t in draw_times:
             draw_snapshot(
                 state=simulation_state,
-                output_folder=folders["snapshots"],
-                run_num=run_num
+                output_folder=snapshots_folder,
+                run_num=0
             )
         timings["visualization"] += time.perf_counter() - t0
 
@@ -185,20 +191,21 @@ def main(
 
     # --- POST-SIMULATION OUTPUT ---
     df: pd.DataFrame = pd.DataFrame([s.__dict__ for s in stats_list])
-    csv_path = Path(base_output_folder) / stats_name  # Use custom stats filename
-    
-    df['result'] = simulation_state.stoppage_reason  # Add stoppage reason to the DataFrame
+    df["result"] = simulation_state.stoppage_reason
     df.to_csv(csv_path, index=False)
     print(f"📊 Statistics saved: {csv_path}")
 
-    create_gif_from_snapshots(
-        snapshot_folder=folders["snapshots"],
-        output_folder=Path(base_output_folder),  # Use custom base folder
-        duration=0.5,
-        gif_name=gif_name,
-    )
-    
-    # Print stoppage reason in a parseable format for run_multiple_experiments.py
+    # Rename snapshots so each has CSV stem in filename
+    # Example: sample_000__INFECTIVITY1_0.01__INFECTIVITY2_0.05_000120.png
+    for png_file in sorted(snapshots_folder.glob("snapshot_*.png")):
+        time_part: str = png_file.stem.split("_")[-1]
+        new_name: Path = snapshots_folder / f"{csv_stem}_{time_part}.png"
+        if new_name != png_file:
+            png_file.rename(new_name)
+
+    print(f"🖼️ Snapshots saved: {snapshots_folder}")
+
+    # Print stoppage reason in parseable format
     print(f"STOPPAGE_REASON:{simulation_state.stoppage_reason}")
 
     # --- BENCHMARK SUMMARY ---
@@ -206,15 +213,17 @@ def main(
     total = sum(timings.values())
     for name in section_names:
         sec = timings[name]
-        print(f"{name:22s}: {sec:8.3f} s ({sec/total*100:5.1f}%)")
+        pct = (sec / total * 100.0) if total > 0 else 0.0
+        print(f"{name:22s}: {sec:8.3f} s ({pct:5.1f}%)")
     print(f"{'Total loop time':22s}: {total_loop_time:8.3f} s (100.0%)")
     print("=========================\n")
+
 
 if __name__ == "__main__":
     parameter_sets: dict[str, list] = {
         "INFECTIVITY1": [0.0, 0.00001, 0.0001, 0.01, 0.05],
         "INFECTIVITY2": [0.0, 0.00001, 0.0001, 0.01, 0.05],
-        # You can add more parameters here, e.g.
+        # Add more parameters if needed, e.g.:
         # "MORTALITY": [0.002, 0.003, 0.004],
     }
 
@@ -238,13 +247,12 @@ if __name__ == "__main__":
                     globals()[key] = value
 
                 # Also update same-name globals in imported modules
-                # (important if you sweep params used inside those modules)
                 for module_name in ("constants", "infection", "physics", "simulation_core", "genetics"):
                     module = sys.modules.get(module_name)
                     if module is not None and hasattr(module, key):
                         setattr(module, key, value)
 
-            # Build a shared output stem: sample + looped params
+            # Build run name from sample + looped params
             param_suffix = "__".join(
                 f"{k}_{v:g}" if isinstance(v, float) else f"{k}_{v}"
                 for k, v in current_params.items()
@@ -252,7 +260,6 @@ if __name__ == "__main__":
             output_stem = f"sample_{tech_sample:03d}__{param_suffix}"
 
             stats_name = f"{output_stem}_statistics.csv"
-            gif_name = f"{output_stem}_animation.gif"
 
             print(f"\nRun #{run_counter}")
             print(f"  tech_sample={tech_sample}")
@@ -262,7 +269,6 @@ if __name__ == "__main__":
             main(
                 base_output_folder="../experiments_outputs",
                 stats_name=stats_name,
-                gif_name=gif_name,
             )
             end: float = time.time()
             print(f"Simulation runtime: {end - start:.2f} seconds ({(end - start) / 60:.2f} minutes)")
