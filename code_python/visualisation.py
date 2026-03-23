@@ -29,7 +29,7 @@ def draw_snapshot(
     state,
     output_folder,
     run_num=0,
-    figsize=(16, 6)
+    figsize=(10, 3)
 ):
     from matplotlib.patches import Patch
 
@@ -59,6 +59,7 @@ def draw_snapshot(
     colors = np.full(n, "gray", dtype=object)
     sizes = np.full(n, 40, dtype=float)
     edgecolors = np.array(["none"] * n, dtype=object)
+    linewidths = np.zeros(n, dtype=float)
 
     # Assign colors by class
     colors[is_child & is_itero] = "limegreen"
@@ -78,14 +79,15 @@ def draw_snapshot(
     colors[is_adult & is_heterozygous] = "brown"
 
     # Sizes
-    sizes[is_child] = 30
-    sizes[is_juvenile_no_terr] = 40
-    sizes[is_juvenile_terr] = 40
-    sizes[is_adult] = 50
+    sizes[is_child] = 9
+    sizes[is_juvenile_no_terr] = 14
+    sizes[is_juvenile_terr] = 14
+    sizes[is_adult] = 19
 
     # Infected: red edge, slightly larger
     edgecolors[is_infected] = "red"
-    sizes[is_infected] += 10
+    linewidths[is_infected] = 1.5
+    sizes[is_infected] += 4
 
     # --- Count animals in each category ---
     count_child_itero = int((is_child & is_itero).sum())
@@ -121,7 +123,15 @@ def draw_snapshot(
 
     # --- Plot ---
     fig, ax = plt.subplots(figsize=figsize)
-    ax.scatter(x, y, c=colors, s=sizes, edgecolors=edgecolors.tolist(), alpha=0.5, linewidth=1.5)
+    ax.scatter(
+    x,
+    y,
+    c=colors,
+    s=sizes,
+    edgecolors=edgecolors.tolist(),
+    alpha=0.8,
+    linewidths=linewidths.tolist()
+    )
     ax.set_xlim(0, state.map_x_size if hasattr(state, "map_x_size") else MAP_X_SIZE)
     ax.set_ylim(0, state.map_y_size if hasattr(state, "map_y_size") else MAP_Y_SIZE)
     ax.set_xlabel("X")
@@ -148,7 +158,7 @@ def draw_snapshot(
     fig.subplots_adjust(top=0.78)
 
     filename = output_folder / f"snapshot_{run_num:03d}_{time_step:06d}.png"
-    plt.savefig(filename, dpi=150, bbox_inches='tight')
+    plt.savefig(filename, dpi=100, bbox_inches='tight')
     plt.close(fig)
 
 

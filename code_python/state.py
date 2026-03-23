@@ -180,6 +180,10 @@ class SimulationStats:
     infected: int
     iteroparous: int
     semelparous: int
+    heterozygous: int
+    infected_semelparous: int
+    infected_iteroparous: int
+    infected_heterozygous: int
     infection_rate: float
     adults: int
     juveniles: int
@@ -191,8 +195,6 @@ class SimulationStats:
     females: int
     males_over_2_years: int
     females_over_2_years: int
-    infectivity1: float
-    infectivity2: float
     run_id: int
     # New fields for detailed counts by type, genotype, and gender
     children_semel_females: int
@@ -212,6 +214,15 @@ class SimulationStats:
     adults_iterop_females: int
     adults_iterop_males: int
     
+    children_heterozygous_females: int
+    children_heterozygous_males: int
+    juv_no_terr_heterozygous_females: int
+    juv_no_terr_heterozygous_males: int
+    juv_terr_heterozygous_females: int
+    juv_terr_heterozygous_males: int
+    adults_heterozygous_females: int
+    adults_heterozygous_males: int
+    
 
 def collect_statistics(
     state: SimulationState,
@@ -229,6 +240,13 @@ def collect_statistics(
             infected=0,
             iteroparous=0,
             semelparous=0,
+            heterozygous=0,
+            
+            infected_semelparous=0,
+            infected_iteroparous=0,
+            infected_heterozygous=0,
+            
+            
             infection_rate=0.0,
             adults=0,
             juveniles=0,
@@ -240,8 +258,6 @@ def collect_statistics(
             females=0,
             males_over_2_years=0,
             females_over_2_years=0,
-            infectivity1=INFECTIVITY1,
-            infectivity2=INFECTIVITY2,
             run_id=run_num,
             children_semel_females=0,
             children_semel_males=0,
@@ -258,13 +274,31 @@ def collect_statistics(
             adults_semel_females=0,
             adults_semel_males=0,
             adults_iterop_females=0,
-            adults_iterop_males=0
+            adults_iterop_males=0,
+            
+            children_heterozygous_females=0,
+            children_heterozygous_males=0,
+            juv_no_terr_heterozygous_females=0,
+            juv_no_terr_heterozygous_males=0,
+            juv_terr_heterozygous_females=0,
+            juv_terr_heterozygous_males=0,
+            adults_heterozygous_females=0,
+            adults_heterozygous_males=0,
+
+            
+            
         )
 
     infected: int = int((state.infection_stage[:n] > 0).sum().item())
     semel_mask = (state.chrom_a[:n].sum(1) == SEMELPAROUS_MASK)
     semel_count: int = int(semel_mask.sum().item())
     itero_count: int = n - semel_count
+    heterozygous_mask = (state.chrom_a[:n].sum(1) == 1)
+    hetero_count: int = int(heterozygous_mask.sum().item())
+    
+    infected_semelparous: int = int(((state.infection_stage[:n] > 0) & semel_mask).sum().item())
+    infected_iteroparous: int = int(((state.infection_stage[:n] > 0) & ~semel_mask).sum().item())
+    infected_heterozygous: int = int(((state.infection_stage[:n] > 0) & heterozygous_mask).sum().item())
 
     children_count: int = int((state.status[:n] == STATUS_CHILD).sum().item())
     juv_no_terr_count: int = int((state.status[:n] == STATUS_JUVENILE_NO_TERR).sum().item())
@@ -312,6 +346,17 @@ def collect_statistics(
     adults_semel_males = int((adults_mask & semel_mask & males_mask).sum().item())
     adults_iterop_females = int((adults_mask & iterop_mask & females_mask).sum().item())
     adults_iterop_males = int((adults_mask & iterop_mask & males_mask).sum().item())
+    
+    
+    children_heterozygous_females = int((children_mask & heterozygous_mask & females_mask).sum().item())
+    children_heterozygous_males = int((children_mask & heterozygous_mask & males_mask).sum().item())
+    juv_no_terr_heterozygous_females = int((juv_no_terr_mask & heterozygous_mask & females_mask).sum().item())
+    juv_no_terr_heterozygous_males = int((juv_no_terr_mask & heterozygous_mask & males_mask).sum().item())
+    juv_terr_heterozygous_females = int((juv_terr_mask & heterozygous_mask & females_mask).sum().item())
+    juv_terr_heterozygous_males = int((juv_terr_mask & heterozygous_mask & males_mask).sum().item())
+    adults_heterozygous_females = int((adults_mask & heterozygous_mask & females_mask).sum().item())
+    adults_heterozygous_males = int((adults_mask & heterozygous_mask & males_mask).sum().item())
+
 
     return SimulationStats(
         time=state.current_time,
@@ -319,6 +364,10 @@ def collect_statistics(
         infected=infected,
         iteroparous=itero_count,
         semelparous=semel_count,
+        heterozygous=hetero_count,
+        infected_semelparous=infected_semelparous,
+        infected_iteroparous=infected_iteroparous,
+        infected_heterozygous=infected_heterozygous,
         infection_rate=float(infection_rate),
         adults=adult_count,
         juveniles=juv_no_terr_count + juv_terr_count,
@@ -330,8 +379,6 @@ def collect_statistics(
         females=females,
         males_over_2_years=males_over_2_years,
         females_over_2_years=females_over_2_years,
-        infectivity1=INFECTIVITY1,
-        infectivity2=INFECTIVITY2,
         run_id=run_num,
         children_semel_females=children_semel_females,
         children_semel_males=children_semel_males,
@@ -348,5 +395,14 @@ def collect_statistics(
         adults_semel_females=adults_semel_females,
         adults_semel_males=adults_semel_males,
         adults_iterop_females=adults_iterop_females,
-        adults_iterop_males=adults_iterop_males
+        adults_iterop_males=adults_iterop_males,
+        children_heterozygous_females=children_heterozygous_females,
+        children_heterozygous_males=children_heterozygous_males,
+        juv_no_terr_heterozygous_females=juv_no_terr_heterozygous_females,
+        juv_no_terr_heterozygous_males=juv_no_terr_heterozygous_males,
+        juv_terr_heterozygous_females=juv_terr_heterozygous_females,
+        juv_terr_heterozygous_males=juv_terr_heterozygous_males,
+        adults_heterozygous_females=adults_heterozygous_females,
+        adults_heterozygous_males=adults_heterozygous_males
+
     )
