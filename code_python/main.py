@@ -242,11 +242,10 @@ if __name__ == "__main__":
             rng = np.random.default_rng(seed)
 
             # Randomly sampled parameters (Monte Carlo)
+            step = 0.005  # allowed values: 0.000, 0.005, 0.010, ..., 0.500
             current_params: dict[str, float] = {
-                "INFECTIVITY1": float(rng.uniform(0.0, 0.5)),
-                "INFECTIVITY2": float(rng.uniform(0.0, 0.5)),
-                # Example extra random parameter:
-                # "MORTALITY": float(rng.uniform(0.0020, 0.0040)),
+                "INFECTIVITY1": float(rng.integers(0, int(0.5 / step) + 1) * step),
+                "INFECTIVITY2": float(rng.integers(0, int(0.5 / step) + 1) * step),
             }
 
             # Apply sampled values before each main() run

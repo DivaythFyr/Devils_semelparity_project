@@ -680,13 +680,13 @@ def process_all_deaths(
         is_semelparous: Tensor = state.chrom_a[:n].sum(dim=1) == 2
         
         # Males: sex == True (1)
-        is_male: Tensor = state.sex[:n] == True
+        # is_male: Tensor = state.sex[:n] == True
         
         # Adults only (juveniles don't die from semelparity)
         is_adult: Tensor = state.status[:n] == STATUS_ADULT
         
-        # ALL semelparous adult males die, regardless of mating status
-        semelparous_death_mask: Tensor = is_semelparous & is_male & is_adult
+        # ALL semelparous adult males and females die, regardless of mating status
+        semelparous_death_mask: Tensor = is_semelparous  & is_adult
         death_mask |= semelparous_death_mask
     
     # ==================== 6. APPLY ALL DEATHS ====================
