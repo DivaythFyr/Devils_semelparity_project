@@ -538,7 +538,6 @@ def transition_juvenile_terr_to_adult(
     print('transition from terr juvenile to adult, num transitioned:', indices.shape[0])
         
     
-
 def process_all_deaths(
     state: SimulationState,
     day_in_year: int,
@@ -674,22 +673,36 @@ def process_all_deaths(
             prob_death_mask: Tensor = prob_death_candidates & (rand_terr < death_prob)
             death_mask |= prob_death_mask
     
-    # ==================== 5. DEATH BY SEMELPARITY (all semelparous males die after breeding season regardless of mating) ====================
+    # ==================== 5. DEATH BY SEMELPARITY MALES (all semelparous males die after breeding season regardless of mating) ====================
     if day_in_year == semelparous_death_day:
         # Semelparous: both alleles are 1 (sum == 2)
         is_semelparous: Tensor = state.chrom_a[:n].sum(dim=1) == 2
         
-        # Males: sex == True (1)
-        # is_male: Tensor = state.sex[:n] == True
+        # Adults only (juveniles don't die from semelparity)
+        is_adult: Tensor = state.status[:n] == STATUS_ADULT
+        
+        is_male: Tensor = state.sex[:n] == True
+        
+        # ALL semelparous adult males and females die, regardless of mating status
+        semelparous_death_mask: Tensor = is_semelparous  & is_adult & is_male
+        death_mask |= semelparous_death_mask
+        
+        
+    # ==================== 6. DEATH BY SEMELPARITY FEMALES (all semelparous females die after children are born) ====================
+    if day_in_year == TIME_OF_DISPOSAL+1:
+        # Semelparous: both alleles are 1 (sum == 2)
+        is_semelparous: Tensor = state.chrom_a[:n].sum(dim=1) == 2
         
         # Adults only (juveniles don't die from semelparity)
         is_adult: Tensor = state.status[:n] == STATUS_ADULT
         
+        is_female: Tensor = state.sex[:n] == False
+        
         # ALL semelparous adult males and females die, regardless of mating status
-        semelparous_death_mask: Tensor = is_semelparous  & is_adult
+        semelparous_death_mask: Tensor = is_semelparous  & is_adult & is_female
         death_mask |= semelparous_death_mask
     
-    # ==================== 6. APPLY ALL DEATHS ====================
+    # ==================== 7. APPLY ALL DEATHS ====================
     if death_mask.any():
         indices_to_remove = th.nonzero(death_mask, as_tuple=True)[0]
         delete_animal(state, indices_to_remove, day_in_year=day_in_year)
