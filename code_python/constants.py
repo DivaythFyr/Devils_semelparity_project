@@ -159,7 +159,7 @@ DISEASE_MORTALITY_FACTOR_STAGE3: float = 0.20    # 20% maximum for terminal + 10
 
 
 # ---- REPRODUCTION ----
-NUM_OF_PROGENY: int = 3           
+NUM_OF_PROGENY: int = 5           
 # Number of offspring per successful mating event. 
 # Used in: replication(), calculate_chrom(), create_initial_state() (pending offspring allocation).
 

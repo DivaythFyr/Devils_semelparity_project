@@ -43,7 +43,7 @@ def main(
     csv_path: Path = snapshots_folder / stats_name
 
     stats_list: list[SimulationStats] = []
-    draw_times: set[int] = {t for t in range(0, TIMEPOINTS, 25)}
+    draw_times: set[int] = {t for t in range(0, TIMEPOINTS, 1)}
 
     PRINT_INTERVAL: int = 1
     STATS_INTERVAL: int = 1
@@ -196,8 +196,16 @@ def main(
     df.to_csv(csv_path, index=False)
     print(f"📊 Statistics saved: {csv_path}")
 
-    # Rename snapshots so each has CSV stem in filename
-    # Example: sample_000__INFECTIVITY1_0.01__INFECTIVITY2_0.05_000120.png
+    # Create GIF FIRST (while files are still named snapshot_*.png)
+    create_gif_from_snapshots(
+        snapshot_folder=snapshots_folder,
+        output_folder=snapshots_folder,
+        gif_name=f"{csv_stem}.gif",
+        duration=0.5,
+        cleanup=False
+    )
+
+    # THEN rename snapshots
     for png_file in sorted(snapshots_folder.glob("snapshot_*.png")):
         time_part: str = png_file.stem.split("_")[-1]
         new_name: Path = snapshots_folder / f"{csv_stem}_{time_part}.png"
@@ -222,7 +230,7 @@ def main(
     
 if __name__ == "__main__":
 
-    NUM_MONTE_CARLO_RUNS: int = 60
+    NUM_MONTE_CARLO_RUNS: int = 1
     BASE_SEED: int = 12345
 
     run_counter: int = 0
@@ -242,10 +250,10 @@ if __name__ == "__main__":
             rng = np.random.default_rng(seed)
 
             # Randomly sampled parameters (Monte Carlo)
-            step = 0.005  # allowed values: 0.000, 0.005, 0.010, ..., 0.500
+            step = 0.05  # allowed values: 0.000, 0.005, 0.010, ..., 0.500
             current_params: dict[str, float] = {
-                "INFECTIVITY1": float(rng.integers(0, int(0.5 / step) + 1) * step),
-                "INFECTIVITY2": float(rng.integers(0, int(0.5 / step) + 1) * step),
+                "INFECTIVITY1": float(rng.integers(1, int(0.5 / step) + 1) * step),
+                "INFECTIVITY2": float(rng.integers(1, int(0.5 / step) + 1) * step),
             }
 
             # Apply sampled values before each main() run

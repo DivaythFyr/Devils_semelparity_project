@@ -684,8 +684,8 @@ def process_all_deaths(
         is_male: Tensor = state.sex[:n] == True
         
         # ALL semelparous adult males and females die, regardless of mating status
-        semelparous_death_mask: Tensor = is_semelparous  & is_adult & is_male
-        death_mask |= semelparous_death_mask
+        semelparous_male_death_mask: Tensor = is_semelparous  & is_adult & is_male
+        death_mask |= semelparous_male_death_mask
         
         
     # ==================== 6. DEATH BY SEMELPARITY FEMALES (all semelparous females die after children are born) ====================
@@ -699,8 +699,8 @@ def process_all_deaths(
         is_female: Tensor = state.sex[:n] == False
         
         # ALL semelparous adult males and females die, regardless of mating status
-        semelparous_death_mask: Tensor = is_semelparous  & is_adult & is_female
-        death_mask |= semelparous_death_mask
+        semelparous_female_death_mask: Tensor = is_semelparous  & is_adult & is_female
+        death_mask |= semelparous_female_death_mask
     
     # ==================== 7. APPLY ALL DEATHS ====================
     if death_mask.any():
