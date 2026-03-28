@@ -14,14 +14,12 @@ from pathlib import Path
 import pandas as pd
 from visualisation import *
 
-
 # ---- TIME CONFIG ----
-TIMEPOINTS: int = 42000
+TIMEPOINTS: int = 130
 # Total simulated days (iterations in main loop).
 
 NUM_OF_TECH_SAMPLES: int = 1
 # Number of technical replicates per parameter set.
-
 
 def main(
     base_output_folder: str = "../output",
@@ -93,6 +91,15 @@ def main(
             device=DEVICE
         )
         timings["infection_spread"] += time.perf_counter() - t0
+        
+        n = simulation_state.pop_size
+        child_infected = ((simulation_state.status[:n] == STATUS_CHILD) &
+                        (simulation_state.infection_stage[:n] > 0)).sum().item()
+        juvterr_infected = ((simulation_state.status[:n] == STATUS_JUVENILE_TERR) &
+                            (simulation_state.infection_stage[:n] > 0)).sum().item()
+        adult_infected = ((simulation_state.status[:n] == STATUS_ADULT) &
+                        (simulation_state.infection_stage[:n] > 0)).sum().item()
+        print(f"infected by status | child={child_infected} juv_terr={juvterr_infected} adult={adult_infected}")
 
         # --- Reproduction ---
         t0 = time.perf_counter()
@@ -252,8 +259,8 @@ if __name__ == "__main__":
             # Randomly sampled parameters (Monte Carlo)
             step = 0.05  # allowed values: 0.000, 0.005, 0.010, ..., 0.500
             current_params: dict[str, float] = {
-                "INFECTIVITY1": float(rng.integers(1, int(0.5 / step) + 1) * step),
-                "INFECTIVITY2": float(rng.integers(1, int(0.5 / step) + 1) * step),
+                "INFECTIVITY1": 0.0, #float(rng.integers(1, int(0.5 / step) + 1) * step),
+                "INFECTIVITY2": 0.0 #float(rng.integers(1, int(0.5 / step) + 1) * step),
             }
 
             # Apply sampled values before each main() run

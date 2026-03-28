@@ -142,7 +142,7 @@ STAGE3_DURATION_MAX: int = 180    # 1.5 years = 180 days
 
 # ---- STAGE-SPECIFIC TRANSMISSION MULTIPLIERS ----
 STAGE1_TRANSMISSION_MULTIPLIER: float = 0.1    # Latent stage (very low)
-STAGE3_TRANSMISSION_MULTIPLIER: float = 10.0   # Terminal stage
+STAGE3_TRANSMISSION_MULTIPLIER: float = 0.5   # Terminal stage
 
 # ---- TRANSMISSION CONSTRAINTS ----
 STAGE1_CAN_TRANSMIT_SEXUAL: bool = False       # Latent does NOT transmit sexually
@@ -225,3 +225,77 @@ ITEROPAROUS_MASK: int = 0
 CHILD_BIRTH_RADIUS: float = 1.0 # how far from the parent the child could be born. Used in: birth_pending_offspring() (initial position of newborns).
 
 
+# ---- NO-TERRITORY JUVENILE DEATH TUNING ----
+# These parameters control gradual mortality for juveniles without territory.
+
+NO_TERRITORY_DEATH_FITNESS_THRESHOLD: float = 80.0
+# Meaning:
+#   Fitness value where fitness-based death pressure becomes zero.
+#   If fitness >= threshold -> fitness component = 0.
+#   If fitness < threshold  -> risk increases as fitness drops.
+# Mathematical valid range:
+#   > 0
+# Practical tuning range:
+#   40.0 to 100.0
+# Effect:
+#   Lower value -> lower death probability (more juveniles survive).
+#   Higher value -> higher death probability.
+
+NO_TERRITORY_DEATH_BASE_MULTIPLIER: float = 0.55
+# Meaning:
+#   Global multiplier for the main gradual death term.
+# Mathematical valid range:
+#   >= 0
+# Practical tuning range:
+#   0.10 to 1.20
+# Effect:
+#   Lower value -> slower, gentler mortality.
+#   Higher value -> faster mortality buildup.
+
+NO_TERRITORY_DEATH_AGE_EXPONENT: float = 1.6
+# Meaning:
+#   Curve shape for age progression between dispersal_deadline and maturity_age.
+#   death ~ age_progress ** exponent
+# Mathematical valid range:
+#   > 0
+# Practical tuning range:
+#   0.8 to 3.0
+# Effect:
+#   < 1.0 -> earlier deaths (front-loaded).
+#   = 1.0 -> linear ramp.
+#   > 1.0 -> later deaths (back-loaded, more gradual early period).
+
+NO_TERRITORY_DEATH_MATURITY_WINDOW_DAYS: int = 12
+# Meaning:
+#   Number of days before maturity where late-pressure boost starts ramping in.
+# Mathematical valid range:
+#   >= 1
+# Practical tuning range:
+#   5 to 30
+# Effect:
+#   Smaller window -> sharper late ramp.
+#   Larger window -> smoother late ramp.
+
+NO_TERRITORY_DEATH_LATE_BOOST: float = 0.30
+# Meaning:
+#   Additional probability added near maturity window.
+# Mathematical valid range:
+#   >= 0
+# Practical tuning range:
+#   0.00 to 0.60
+# Effect:
+#   Lower value -> fewer near-maturity deaths.
+#   Higher value -> stronger near-maturity cleanup.
+
+NO_TERRITORY_DEATH_MAX_PROB: float = 0.90
+# Meaning:
+#   Hard cap on daily no-territory death probability.
+# Mathematical valid range:
+#   0 to 1
+# Practical tuning range:
+#   0.60 to 0.98
+# Effect:
+#   Lower value -> avoids abrupt crash; more survivors persist.
+#   Higher value -> can produce steeper population drops near maturity.
+# Note:
+#   Keep < 1.0 to avoid synchronized one-day wipeouts.

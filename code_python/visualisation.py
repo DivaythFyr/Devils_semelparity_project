@@ -79,7 +79,7 @@ def draw_snapshot(
     colors[is_adult & is_heterozygous] = "brown"
 
     # Sizes
-    sizes[is_child] = 9
+    sizes[is_child] = 5
     sizes[is_juvenile_no_terr] = 14
     sizes[is_juvenile_terr] = 14
     sizes[is_adult] = 19

@@ -216,7 +216,6 @@ def infection_spread(
 
 
 # ==================== AUXILIARY FUNCTIONS (remain unchanged) ====================
-
 def initialize_disease_durations(
     state: SimulationState,
     infected_indices: Tensor,

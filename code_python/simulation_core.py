@@ -645,30 +645,40 @@ def process_all_deaths(
     
     # ==================== 4. DEATH BY NO TERRITORY ====================
     juv_no_terr_mask: Tensor = state.status[:n] == STATUS_JUVENILE_NO_TERR
-    
+
     if juv_no_terr_mask.any():
         ages: Tensor = state.age[:n]
         fitness: Tensor = state.fitness[:n]
-        
-        # Mandatory death at maturity age
-        mandatory_death_mask: Tensor = juv_no_terr_mask & (ages >= maturity_age)
-        death_mask |= mandatory_death_mask
-        
-        # Probabilistic death between dispersal_deadline and maturity_age
-        prob_death_candidates: Tensor = juv_no_terr_mask & (ages > dispersal_deadline) & (ages < maturity_age)
-        
+
+        # All no-territory juveniles past dispersal deadline are candidates.
+        # (No hard one-day kill at maturity.)
+        prob_death_candidates: Tensor = juv_no_terr_mask & (ages > dispersal_deadline)
+
         if prob_death_candidates.any():
-            # fitness_factor: lower fitness = higher death chance (0 to 1)
-            fitness_factor: Tensor = th.nn.functional.relu(80.0 - fitness) / 80.0
-            
-            # age_over_deadline: normalized time past deadline (0 to 1)
-            age_range: float = float(maturity_age - dispersal_deadline)
-            age_over_deadline = (ages > dispersal_deadline).float()
-            age_over_deadline = th.clamp(age_over_deadline, min=0.0, max=1.0)
-            
-            # Death probability = fitness_factor * age_over_deadline
-            death_prob: Tensor = fitness_factor * age_over_deadline
-            
+            # Fitness effect: lower fitness => higher risk
+            threshold = NO_TERRITORY_DEATH_FITNESS_THRESHOLD
+            fitness_factor: Tensor = th.clamp((threshold - fitness) / threshold, min=0.0, max=1.0)
+
+            # Smooth age ramp from dispersal_deadline to maturity_age
+            age_range: float = max(1.0, float(maturity_age - dispersal_deadline))
+            age_progress: Tensor = th.clamp((ages.float() - float(dispersal_deadline)) / age_range, min=0.0, max=1.0)
+            age_factor: Tensor = age_progress.pow(NO_TERRITORY_DEATH_AGE_EXPONENT)
+
+            # Base risk from fitness + age
+            base_prob: Tensor = NO_TERRITORY_DEATH_BASE_MULTIPLIER * fitness_factor * age_factor
+
+            # Extra smooth pressure near/after maturity (instead of instant death day)
+            maturity_window = float(NO_TERRITORY_DEATH_MATURITY_WINDOW_DAYS)
+            late_progress: Tensor = th.clamp(
+                (ages.float() - float(maturity_age - maturity_window)) / maturity_window,
+                min=0.0,
+                max=1.0
+            )
+            late_boost: Tensor = NO_TERRITORY_DEATH_LATE_BOOST * late_progress
+
+            # Final probability (capped below 1.0 to avoid synchronized wipeout)
+            death_prob: Tensor = th.clamp(base_prob + late_boost, min=0.0, max=NO_TERRITORY_DEATH_MAX_PROB)
+
             rand_terr: Tensor = th.rand(n, device=device)
             prob_death_mask: Tensor = prob_death_candidates & (rand_terr < death_prob)
             death_mask |= prob_death_mask
