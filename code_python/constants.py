@@ -120,11 +120,11 @@ STOPPAGE_ITEROPAROUS_PROPORTION_CONDITION: float = 0.999
 # Used in: main() (stoppage logic).
 
 # ---- INFECTION ----
-INFECTIVITY1: float = 0.0
+INFECTIVITY_SEXUAL: float = 0.0
 # Sexual transmission probability parameter (during breeding season, adults only, phase 1). 
 # Used in: infection_spread().
 
-INFECTIVITY2: float = 0.0
+INFECTIVITY_NONSEXUAL: float = 0.0
 # Nonsexual (contact) transmission probability parameter (all residents, all phases). 
 # Used in: infection_spread().
 

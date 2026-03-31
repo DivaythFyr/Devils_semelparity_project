@@ -15,7 +15,7 @@ import pandas as pd
 from visualisation import *
 
 # ---- TIME CONFIG ----
-TIMEPOINTS: int = 130
+TIMEPOINTS: int = 15000
 # Total simulated days (iterations in main loop).
 
 NUM_OF_TECH_SAMPLES: int = 1
@@ -41,7 +41,7 @@ def main(
     csv_path: Path = snapshots_folder / stats_name
 
     stats_list: list[SimulationStats] = []
-    draw_times: set[int] = {t for t in range(0, TIMEPOINTS, 1)}
+    draw_times: set[int] = {t for t in range(0, TIMEPOINTS, 42000)}
 
     PRINT_INTERVAL: int = 1
     STATS_INTERVAL: int = 1
@@ -83,8 +83,8 @@ def main(
             simulation_state,
             distance_sq=distance_sq,
             day_in_year=day_in_year,
-            infectivity1=INFECTIVITY1,
-            infectivity2=INFECTIVITY2,
+            infectivity_sexual=INFECTIVITY_SEXUAL,
+            infectivity_nonsexual=INFECTIVITY_NONSEXUAL,
             stage1_multiplier=STAGE1_TRANSMISSION_MULTIPLIER,
             stage3_multiplier=STAGE3_TRANSMISSION_MULTIPLIER,
             breeding_days=BREEDING_DAYS,
@@ -92,14 +92,14 @@ def main(
         )
         timings["infection_spread"] += time.perf_counter() - t0
         
-        n = simulation_state.pop_size
-        child_infected = ((simulation_state.status[:n] == STATUS_CHILD) &
-                        (simulation_state.infection_stage[:n] > 0)).sum().item()
-        juvterr_infected = ((simulation_state.status[:n] == STATUS_JUVENILE_TERR) &
-                            (simulation_state.infection_stage[:n] > 0)).sum().item()
-        adult_infected = ((simulation_state.status[:n] == STATUS_ADULT) &
-                        (simulation_state.infection_stage[:n] > 0)).sum().item()
-        print(f"infected by status | child={child_infected} juv_terr={juvterr_infected} adult={adult_infected}")
+        # n = simulation_state.pop_size
+        # child_infected = ((simulation_state.status[:n] == STATUS_CHILD) &
+        #                 (simulation_state.infection_stage[:n] > 0)).sum().item()
+        # juvterr_infected = ((simulation_state.status[:n] == STATUS_JUVENILE_TERR) &
+        #                     (simulation_state.infection_stage[:n] > 0)).sum().item()
+        # adult_infected = ((simulation_state.status[:n] == STATUS_ADULT) &
+        #                 (simulation_state.infection_stage[:n] > 0)).sum().item()
+        # print(f"infected by status | child={child_infected} juv_terr={juvterr_infected} adult={adult_infected}")
 
         # --- Reproduction ---
         t0 = time.perf_counter()
@@ -259,8 +259,8 @@ if __name__ == "__main__":
             # Randomly sampled parameters (Monte Carlo)
             step = 0.05  # allowed values: 0.000, 0.005, 0.010, ..., 0.500
             current_params: dict[str, float] = {
-                "INFECTIVITY1": 0.0, #float(rng.integers(1, int(0.5 / step) + 1) * step),
-                "INFECTIVITY2": 0.0 #float(rng.integers(1, int(0.5 / step) + 1) * step),
+                "INFECTIVITY_SEXUAL": 0.0, #float(rng.integers(1, int(0.5 / step) + 1) * step),
+                "INFECTIVITY_NONSEXUAL": float(rng.integers(1, int(0.5 / step) + 1) * step),
             }
 
             # Apply sampled values before each main() run
@@ -294,58 +294,3 @@ if __name__ == "__main__":
             )
             end: float = time.time()
             print(f"Simulation runtime: {end - start:.2f} seconds ({(end - start) / 60:.2f} minutes)")
-
-
-# if __name__ == "__main__":
-#     parameter_sets: dict[str, list] = {
-#         "INFECTIVITY1": [0.01],
-#         "INFECTIVITY2": [0.01],
-#         # Add more parameters if needed, e.g.:
-#         # "MORTALITY": [0.002, 0.003, 0.004],
-#     }
-
-#     param_names: list[str] = list(parameter_sets.keys())
-#     param_value_lists: list[list] = [parameter_sets[name] for name in param_names]
-
-#     run_counter: int = 0
-
-#     # Loop over all parameter combinations
-#     for combo in itertools.product(*param_value_lists):
-#         current_params: dict[str, float] = dict(zip(param_names, combo))
-
-#         # Technical samples loop
-#         for tech_sample in range(NUM_OF_TECH_SAMPLES):
-#             run_counter += 1
-
-#             # Assign looped values before each main() run
-#             for key, value in current_params.items():
-#                 # Update globals in this file
-#                 if key in globals():
-#                     globals()[key] = value
-
-#                 # Also update same-name globals in imported modules
-#                 for module_name in ("constants", "infection", "physics", "simulation_core", "genetics"):
-#                     module = sys.modules.get(module_name)
-#                     if module is not None and hasattr(module, key):
-#                         setattr(module, key, value)
-
-#             # Build run name from sample + looped params
-#             param_suffix = "__".join(
-#                 f"{k}_{v:g}" if isinstance(v, float) else f"{k}_{v}"
-#                 for k, v in current_params.items()
-#             )
-#             output_stem = f"sample_{tech_sample:03d}__{param_suffix}"
-
-#             stats_name = f"{output_stem}_statistics.csv"
-
-#             print(f"\nRun #{run_counter}")
-#             print(f"  tech_sample={tech_sample}")
-#             print(f"  params={current_params}")
-
-#             start: float = time.time()
-#             main(
-#                 base_output_folder="../experiments_outputs",
-#                 stats_name=stats_name,
-#             )
-#             end: float = time.time()
-#             print(f"Simulation runtime: {end - start:.2f} seconds ({(end - start) / 60:.2f} minutes)")

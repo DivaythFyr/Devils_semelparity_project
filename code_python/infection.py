@@ -10,8 +10,8 @@ def calculate_transmission_probability(
     susceptible_indices: Tensor,
     dist_sq_matrix: Tensor,
     day_in_year: int,
-    infectivity1: float = INFECTIVITY1,
-    infectivity2: float = INFECTIVITY2,
+    infectivity_sexual: float = INFECTIVITY_SEXUAL,
+    infectivity_nonsexual: float = INFECTIVITY_NONSEXUAL,
     stage1_multiplier: float = STAGE1_TRANSMISSION_MULTIPLIER,
     stage3_multiplier: float = STAGE3_TRANSMISSION_MULTIPLIER,
     breeding_days: int = BREEDING_DAYS,
@@ -72,7 +72,7 @@ def calculate_transmission_probability(
                          susceptible_adult_mask.unsqueeze(1) & \
                          transmitter_sexual_allowed_mask.unsqueeze(0)
         
-        sexual_component[adult_pair_mask] = infectivity1
+        sexual_component[adult_pair_mask] = infectivity_sexual
     
     # ==================== 5. NONSEXUAL COMPONENT ====================
     # Contact transmission is always available (but with different multipliers by stages)
@@ -82,7 +82,7 @@ def calculate_transmission_probability(
     contact_allowed_matrix = transmitter_contact_allowed_mask.unsqueeze(0).expand(num_susceptibles, -1)
     
     # Apply base probability of contact transmission
-    nonsexual_component[contact_allowed_matrix] = infectivity2
+    nonsexual_component[contact_allowed_matrix] = infectivity_nonsexual
     
     # ==================== 6. COMBINE ALL COMPONENTS ====================
     total_prob = stage_multiplier_matrix * distance_factor * (sexual_component + nonsexual_component)
@@ -94,8 +94,8 @@ def infection_spread(
     state: SimulationState,
     distance_sq: Tensor,
     day_in_year: int,
-    infectivity1: float = INFECTIVITY1,
-    infectivity2: float = INFECTIVITY2,
+    infectivity_sexual: float = INFECTIVITY_SEXUAL,
+    infectivity_nonsexual: float = INFECTIVITY_NONSEXUAL,
     stage1_multiplier: float = STAGE1_TRANSMISSION_MULTIPLIER,
     stage3_multiplier: float = STAGE3_TRANSMISSION_MULTIPLIER,
     breeding_days: int = BREEDING_DAYS,
@@ -189,8 +189,8 @@ def infection_spread(
         susceptible_indices=susceptibles,
         dist_sq_matrix=dist_sq_subset,
         day_in_year=day_in_year,
-        infectivity1=infectivity1,
-        infectivity2=infectivity2,
+        infectivity_sexual=infectivity_sexual,
+        infectivity_nonsexual=infectivity_nonsexual,
         stage1_multiplier=stage1_multiplier,
         stage3_multiplier=stage3_multiplier,
         breeding_days=breeding_days,
